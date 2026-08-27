@@ -112,25 +112,7 @@ class LandingScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 140, horizontal: 24),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00E5FF).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF00E5FF)),
-                const SizedBox(width: 8),
-                Text(
-                  'AI EXCEPTION ENGINE LIVE',
-                  style: GoogleFonts.inter(color: const Color(0xFF00E5FF), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.5),
-                ),
-              ],
-            ),
-          ).animate().fadeIn(duration: 600.ms).slideY(begin: 1, end: 0, curve: Curves.easeOutQuad),
+
           const SizedBox(height: 32),
           Text(
             'Predictive Compliance,\nZero Friction.',
