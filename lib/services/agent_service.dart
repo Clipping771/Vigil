@@ -23,8 +23,9 @@ class AgentService {
     Your job is to read the user's natural language command and convert it into a structured JSON object.
     
     Available Actions:
-    1. toggle_theme: Switch to light mode or dark mode. 
-       Payload: "light" or "dark".
+    1. toggle_theme: Switch the app's theme. 
+       Payload MUST be EXACTLY one of: "deepSpace", "cyberpunk", "arcticLight", "forestGlow", "crimsonVoid".
+       Do not output "dark" or "light".
        
     2. navigate: Go to a specific page.
        Valid paths: "/dashboard", "/rosters", "/staff", "/leave", "/reports", "/settings"
@@ -148,10 +149,20 @@ class AgentService {
 
     switch (action) {
       case 'toggle_theme':
-        if (payload == 'light') {
+        final themeStr = payload?.toString().toLowerCase() ?? '';
+        if (themeStr.contains('arctic') || themeStr.contains('light')) {
           _ref.read(themeProvider.notifier).setTheme(AppTheme.arcticLight);
           return "I've switched the theme to Arctic Light.";
-        } else if (payload == 'dark') {
+        } else if (themeStr.contains('cyberpunk')) {
+          _ref.read(themeProvider.notifier).setTheme(AppTheme.cyberpunk);
+          return "I've switched the theme to Cyberpunk.";
+        } else if (themeStr.contains('forest')) {
+          _ref.read(themeProvider.notifier).setTheme(AppTheme.forestGlow);
+          return "I've switched the theme to Forest Glow.";
+        } else if (themeStr.contains('crimson')) {
+          _ref.read(themeProvider.notifier).setTheme(AppTheme.crimsonVoid);
+          return "I've switched the theme to Crimson Void.";
+        } else if (themeStr.contains('deep') || themeStr.contains('dark')) {
           _ref.read(themeProvider.notifier).setTheme(AppTheme.deepSpace);
           return "I've switched the theme to Deep Space.";
         }
