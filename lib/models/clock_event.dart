@@ -4,6 +4,9 @@ class ClockEvent {
   final String employeeId;
   final String eventType;
   final DateTime eventTime;
+  final double? latitude;
+  final double? longitude;
+  final bool isGeofenced;
   final DateTime createdAt;
 
   ClockEvent({
@@ -12,6 +15,9 @@ class ClockEvent {
     required this.employeeId,
     required this.eventType,
     required this.eventTime,
+    this.latitude,
+    this.longitude,
+    this.isGeofenced = false,
     required this.createdAt,
   });
 
@@ -22,7 +28,10 @@ class ClockEvent {
       employeeId: json['employee_id'],
       eventType: json['event_type'],
       eventTime: DateTime.parse(json['event_time']),
-      createdAt: DateTime.parse(json['created_at']),
+      latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
+      longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
+      isGeofenced: json['is_geofenced'] ?? false,
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
     );
   }
 }

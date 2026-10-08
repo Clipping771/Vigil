@@ -12,7 +12,11 @@ import '../widgets/premium_card.dart';
 import '../widgets/animated_button.dart';
 import '../widgets/agent_fab.dart';
 import '../providers/theme_provider.dart';
+import '../providers/geofence_provider.dart';
 import 'dart:ui';
+import 'package:intl/intl.dart';
+import '../widgets/staff_terminal_view.dart';
+import '../providers/live_workforce_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -24,6 +28,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   String? _resolvingExceptionId;
   String? _aiSuggestion;
+  int _activeTab = 0; // 0: Manager Overview, 1: My Clock Terminal
 
   @override
   Widget build(BuildContext context) {
@@ -44,8 +49,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: Padding(
               padding: const EdgeInsets.all(32.0),
               child: user?.role == 'staff' 
-                  ? _buildStaffView(context, ref) 
-                  : _buildManagerView(context, ref, activeExceptionsAsync),
+                  ? const StaffTerminalView() 
+                  : (_activeTab == 0
+                      ? _buildManagerView(context, ref, activeExceptionsAsync)
+                      : const StaffTerminalView()),
             ),
           ),
         ],
@@ -168,11 +175,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Column(
             children: [
               const SizedBox(height: 24),
-              _buildNavItem(context, Icons.dashboard, 'Live Dashboard', true, () {}),
+              _buildNavItem(
+                context, 
+                Icons.dashboard, 
+                'Live Dashboard', 
+                user?.role == 'staff' || _activeTab == 0, 
+                () {
+                  if (mounted) setState(() => _activeTab = 0);
+                },
+              ),
+              if (user?.role != 'staff')
+                _buildNavItem(
+                  context,
+                  Icons.fingerprint,
+                  'My Punch Terminal',
+                  _activeTab == 1,
+                  () {
+                    if (mounted) setState(() => _activeTab = 1);
+                  },
+                ),
               _buildNavItem(context, Icons.people, 'Staff Directory', false, () => context.go('/staff')),
               _buildNavItem(context, Icons.calendar_month, 'Rosters & Scheduling', false, () => context.go('/rosters')),
               _buildNavItem(context, Icons.beach_access, 'Leave Management', false, () => context.go('/leave')),
-              _buildNavItem(context, Icons.location_on, 'Geofence Zones', false, () {}),
+              _buildNavItem(context, Icons.location_on, 'Geofence Zones', false, () => context.go('/geofence')),
               _buildNavItem(context, Icons.bar_chart, 'Compliance Reports', false, () => context.go('/reports')),
               if (user?.role == 'system_admin') ...[
                 const SizedBox(height: 12),
@@ -221,194 +246,107 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildStaffView(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: PremiumCard(
-        blurRadius: 30,
-        opacity: 0.1,
-        child: SizedBox(
-          width: 500,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.fingerprint, size: 80, color: Theme.of(context).colorScheme.primary)
-                .animate(onPlay: (controller) => controller.repeat(reverse: true))
-                .scale(begin: const Offset(1, 1), end: const Offset(1.1, 1.1), duration: 2.seconds),
-              const SizedBox(height: 24),
-              Text('Secure Terminal', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
-              const SizedBox(height: 8),
-              const Text('Geofenced Biometric & QR Verification.', style: TextStyle(color: Colors.white60)),
-              const SizedBox(height: 48),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 180,
-                    child: AnimatedButton(
-                      text: 'GPS CLOCK IN',
-                      onPressed: () => _handleGPSClockIn(ref),
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  SizedBox(
-                    width: 180,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF00E5FF)),
-                      label: const Text('SCAN QR'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF00E5FF),
-                        side: BorderSide(color: const Color(0xFF00E5FF).withOpacity(0.5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                      ),
-                      onPressed: () => _showQRScanner(context, ref),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton.icon(
-                  icon: const Icon(Icons.logout, color: Colors.redAccent),
-                  label: const Text('CLOCK OUT', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                  onPressed: () {
-                     ref.read(clockServiceProvider).simulateClockEvent('clock_out');
-                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clock Out recorded.')));
-                  },
-                ),
-              )
-            ],
-          ),
-        ),
-      ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
-    );
-  }
 
-  Future<void> _handleGPSClockIn(WidgetRef ref) async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location services are disabled.')));
-      return;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location permissions are denied')));
-        return;
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location permissions are permanently denied.')));
-      return;
-    } 
-
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verifying location...')));
-    Position position = await Geolocator.getCurrentPosition();
-    
-    // In production, we'd check `position` against site boundaries.
-    // Here we proceed to clock in.
-    ref.read(clockServiceProvider).simulateClockEvent('clock_in');
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('GPS Verified. Clocked in at ${position.latitude.toStringAsFixed(2)}, ${position.longitude.toStringAsFixed(2)}')));
-  }
-
-  void _showQRScanner(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            width: 300,
-            height: 300,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFF00E5FF), width: 2),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Stack(
-                children: [
-                  MobileScanner(
-                    onDetect: (capture) {
-                      final List<Barcode> barcodes = capture.barcodes;
-                      if (barcodes.isNotEmpty) {
-                        Navigator.pop(dialogContext);
-                        ref.read(clockServiceProvider).simulateClockEvent('clock_in');
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('QR Verified. Clocked In.')));
-                      }
-                    },
-                  ),
-                  const Center(
-                    child: Icon(Icons.qr_code_scanner, size: 80, color: Colors.white24),
-                  ),
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.pop(dialogContext),
-                    ),
-                  )
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildManagerView(BuildContext context, WidgetRef ref, AsyncValue activeExceptionsAsync) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildDashboardHeader(activeExceptionsAsync).animate().fadeIn().slideY(begin: -0.2, end: 0),
-        const SizedBox(height: 32),
-        Expanded(
-          child: activeExceptionsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+    final workforce = ref.watch(workforceProvider);
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDashboardHeader(activeExceptionsAsync, workforce).animate().fadeIn().slideY(begin: -0.2, end: 0),
+          const SizedBox(height: 24),
+
+          // 1. REAL-TIME WORKFORCE METRIC CARDS
+          _buildWorkforceKpiRow(workforce, activeExceptionsAsync),
+          const SizedBox(height: 32),
+
+          // 2. LIVE WHO'S ON DUTY FEED (Real-Time Attendance)
+          _buildLiveAttendanceFeed(context, workforce),
+          const SizedBox(height: 36),
+
+          // 3. ACTIONABLE EXCEPTIONS SECTION
+          Text(
+            'Actionable Compliance Exceptions',
+            style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Roster breaches, unapproved overtime, and geofence alerts',
+            style: TextStyle(color: Colors.white60, fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+
+          activeExceptionsAsync.when(
+            loading: () => const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator())),
             error: (err, _) => Center(child: Text('Error loading exceptions: $err', style: const TextStyle(color: Colors.white))),
             data: (exceptions) {
               if (exceptions.isEmpty) return _buildEmptyState();
               
               return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: exceptions.length,
                 itemBuilder: (context, index) {
-                  return _buildExceptionRow(context, ref, exceptions[index])
+                  return _buildExceptionRow(context, ref, exceptions[index], workforce)
                       .animate()
                       .fadeIn(delay: (50 * index).ms)
-                      .slideX(begin: 0.1, end: 0);
+                      .slideX(begin: 0.05, end: 0);
                 },
               );
             },
           ),
-        ),
-      ],
+          const SizedBox(height: 40),
+        ],
+      ),
     );
   }
 
-  Widget _buildDashboardHeader(AsyncValue activeExceptionsAsync) {
+  Widget _buildDashboardHeader(AsyncValue activeExceptionsAsync, WorkforceState workforce) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Actionable Exceptions',
-              style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+            Row(
+              children: [
+                Text(
+                  'Workforce Command Center',
+                  style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(width: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF10B981),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'LIVE REALTIME',
+                        style: TextStyle(fontSize: 10, color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             const Text(
-              'Real-time workforce compliance monitoring',
+              'Real-time workforce attendance and compliance monitoring',
               style: TextStyle(color: Colors.white60),
             )
           ],
@@ -434,7 +372,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${exceptions.length} Pending',
+                  '${exceptions.length} Pending Exceptions',
                   style: TextStyle(
                     color: exceptions.isNotEmpty ? Colors.orange : Colors.green,
                     fontWeight: FontWeight.bold,
@@ -449,6 +387,358 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           error: (_, __) => const SizedBox(),
         ),
       ],
+    );
+  }
+
+  Widget _buildWorkforceKpiRow(WorkforceState workforce, AsyncValue activeExceptionsAsync) {
+    final pendingCount = activeExceptionsAsync.value?.length ?? 0;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _buildKpiCard(
+            title: 'On Shift Now',
+            value: '${workforce.onShiftCount}',
+            subtitle: 'Active staff clocked in',
+            icon: Icons.badge_outlined,
+            iconColor: const Color(0xFF10B981),
+            glowColor: const Color(0xFF10B981),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'On Break',
+            value: '${workforce.onBreakCount}',
+            subtitle: 'Fair work rest/meal',
+            icon: Icons.coffee,
+            iconColor: Colors.amberAccent,
+            glowColor: Colors.amberAccent,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Actionable Alerts',
+            value: '$pendingCount',
+            subtitle: 'Roster / geofence flags',
+            icon: Icons.warning_amber,
+            iconColor: pendingCount > 0 ? Colors.redAccent : Colors.white54,
+            glowColor: pendingCount > 0 ? Colors.redAccent : Colors.transparent,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Total Roster',
+            value: '${workforce.totalStaffCount}',
+            subtitle: 'Registered organization staff',
+            icon: Icons.people_outline,
+            iconColor: const Color(0xFF3B82F6),
+            glowColor: const Color(0xFF3B82F6),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildKpiCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required Color glowColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        boxShadow: [
+          if (glowColor != Colors.transparent)
+            BoxShadow(color: glowColor.withOpacity(0.08), blurRadius: 20, spreadRadius: -5),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(title, style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500)),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 4),
+          Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveAttendanceFeed(BuildContext context, WorkforceState workforce) {
+    return PremiumCard(
+      blurRadius: 20,
+      opacity: 0.08,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.people_alt, color: Color(0xFF10B981), size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Who's On Duty Right Now",
+                        style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Live workforce attendance synced across all devices in real time',
+                        style: TextStyle(color: Colors.white54, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: workforce.onShiftCount > 0 ? const Color(0xFF10B981).withOpacity(0.15) : Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: workforce.onShiftCount > 0 ? const Color(0xFF10B981).withOpacity(0.4) : Colors.white10),
+                ),
+                child: Text(
+                  '${workforce.onShiftCount} Active On Shift',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: workforce.onShiftCount > 0 ? const Color(0xFF10B981) : Colors.white60,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Divider(color: Colors.white10),
+          const SizedBox(height: 12),
+
+          if (workforce.staffList.isEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text('No employees found in directory.', style: TextStyle(color: Colors.white54)),
+              ),
+            ),
+          ] else ...[
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: workforce.staffList.length,
+              separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 20),
+              itemBuilder: (context, index) {
+                final staff = workforce.staffList[index];
+                final isClockedIn = staff.status == StaffWorkStatus.clockedIn;
+                final isOnBreak = staff.status == StaffWorkStatus.onBreak;
+                final worked = staff.currentDuration;
+                final hours = worked.inHours;
+                final mins = worked.inMinutes % 60;
+                final durationStr = hours > 0 ? '${hours}h ${mins}m' : '${mins}m';
+
+                return Row(
+                  children: [
+                    // Avatar with status ring
+                    Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 22,
+                          backgroundColor: Colors.white.withOpacity(0.1),
+                          child: Text(
+                            staff.fullName.isNotEmpty ? staff.fullName[0].toUpperCase() : '?',
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        ),
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isClockedIn 
+                                  ? const Color(0xFF10B981) 
+                                  : (isOnBreak ? Colors.amberAccent : Colors.white38),
+                              border: Border.all(color: const Color(0xFF1E293B), width: 2),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Employee Name and Role/Location
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                staff.fullName,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  staff.role.toUpperCase(),
+                                  style: const TextStyle(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${staff.email} • ${staff.siteLocation}',
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Live Status Badge & Ticking Time
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isClockedIn 
+                                      ? const Color(0xFF10B981).withOpacity(0.15) 
+                                      : (isOnBreak ? Colors.amberAccent.withOpacity(0.15) : Colors.white.withOpacity(0.05)),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isClockedIn 
+                                        ? const Color(0xFF10B981).withOpacity(0.4) 
+                                        : (isOnBreak ? Colors.amberAccent.withOpacity(0.4) : Colors.white10),
+                                  ),
+                                ),
+                                child: Text(
+                                  isClockedIn 
+                                      ? 'CLOCKED IN' 
+                                      : (isOnBreak ? 'ON BREAK' : 'OFF DUTY'),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isClockedIn 
+                                        ? const Color(0xFF10B981) 
+                                        : (isOnBreak ? Colors.amberAccent : Colors.white54),
+                                  ),
+                                ),
+                              ),
+                              if (isClockedIn) ...[
+                                const SizedBox(width: 10),
+                                Text(
+                                  '$durationStr on duty',
+                                  style: GoogleFonts.firaCode(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF10B981),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            staff.shiftStartTime != null
+                                ? 'Shift started at ${DateFormat('hh:mm a').format(staff.shiftStartTime!)}'
+                                : 'No active shift today',
+                            style: const TextStyle(fontSize: 11, color: Colors.white38),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Location / GPS Tag
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                staff.isGeofenced ? Icons.verified_outlined : Icons.location_on_outlined,
+                                size: 14,
+                                color: staff.isGeofenced ? const Color(0xFF10B981) : Colors.amberAccent,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                staff.isGeofenced ? 'Geofence Verified' : (staff.latitude != null ? 'GPS Tagged' : 'Terminal'),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: staff.isGeofenced ? const Color(0xFF10B981) : Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (staff.latitude != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '${staff.latitude!.toStringAsFixed(2)}, ${staff.longitude!.toStringAsFixed(2)}',
+                              style: GoogleFonts.firaCode(fontSize: 10, color: Colors.white38),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -475,13 +765,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildExceptionRow(BuildContext context, WidgetRef ref, dynamic ex) {
+  Widget _buildExceptionRow(BuildContext context, WidgetRef ref, dynamic ex, WorkforceState workforce) {
     final theme = Theme.of(context);
     final isHighSeverity = ex.severity == 'high' || ex.severity == 'critical';
     final severityColor = isHighSeverity ? theme.colorScheme.error : Colors.orangeAccent;
 
     final isResolving = _resolvingExceptionId == ex.id;
     final hasSuggestion = _aiSuggestion != null && _resolvingExceptionId == ex.id;
+
+    final employeeDisplayName = workforce.employeeNames[ex.employeeId] ?? ex.employeeId.substring(0, 8);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
@@ -535,11 +827,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Icon(Icons.person_outline, size: 16, color: Colors.white38),
+                          const Icon(Icons.person, size: 16, color: Color(0xFF3B82F6)),
                           const SizedBox(width: 6),
-                          Text(ex.employeeId.substring(0, 8), style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                          Text(
+                            employeeDisplayName, 
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
                           const SizedBox(width: 24),
-                          Icon(Icons.access_time, size: 16, color: Colors.white38),
+                          const Icon(Icons.access_time, size: 16, color: Colors.white38),
                           const SizedBox(width: 6),
                           const Text('Logged Today', style: TextStyle(fontSize: 12, color: Colors.white54)),
                         ],

@@ -15,6 +15,7 @@ import 'screens/leave_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
+import 'screens/geofence_screen.dart';
 import 'providers/theme_provider.dart';
 
 void main() async {
@@ -85,6 +86,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin',
         builder: (context, state) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/geofence',
+        builder: (context, state) => const GeofenceScreen(),
       ),
     ],
   );

@@ -21,6 +21,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final session = _supabase.auth.currentSession;
     if (session != null) {
       await _fetchEmployeeData(session.user.id);
+    } else {
+      // Auto mock-login for prototype testing after hot restarts
+      await _mockLogin('alice.smith@securelock.com');
     }
   }
 

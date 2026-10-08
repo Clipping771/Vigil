@@ -8,7 +8,6 @@ import '../providers/settings_provider.dart';
 import '../providers/exception_provider.dart';
 import '../providers/roster_provider.dart';
 import '../providers/staff_provider.dart';
-import '../providers/auth_provider.dart';
 
 final agentServiceProvider = Provider((ref) => AgentService(ref));
 
@@ -181,7 +180,8 @@ class AgentService {
 
       case 'check_exceptions':
         try {
-          final exceptions = await _ref.read(exceptionStreamProvider.future);
+          final exceptionsAsync = _ref.read(exceptionStreamProvider);
+          final exceptions = exceptionsAsync.value ?? [];
           final pending = exceptions.where((e) => e.status == 'pending').toList();
           
           if (pending.isEmpty) {

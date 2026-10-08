@@ -32,6 +32,20 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
     _selectedDay = _focusedDay;
   }
 
+  Future<void> _deleteShift(String shiftId) async {
+    try {
+      await Supabase.instance.client.from('shifts').delete().eq('id', shiftId);
+      ref.refresh(rosterProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shift removed successfully.'), backgroundColor: Colors.orange));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting shift: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
   List<Shift> _getShiftsForDay(DateTime day, Map<DateTime, List<Shift>> shiftsMap) {
     // Normalize to midnight UTC for lookup
     final normalized = DateTime.utc(day.year, day.month, day.day);
@@ -59,7 +73,8 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('Add Shift for ${DateFormat('MMM d').format(_selectedDay ?? _focusedDay)}'),
+              backgroundColor: const Color(0xFF1E293B),
+              title: Text('Add Shift for ${DateFormat('MMM d').format(_selectedDay ?? _focusedDay)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               content: SizedBox(
                 width: 400,
                 child: SingleChildScrollView(
@@ -68,7 +83,9 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                     children: [
                       DropdownButtonFormField<Employee>(
                         value: selectedEmployee,
-                        decoration: const InputDecoration(labelText: 'Employee', border: OutlineInputBorder()),
+                        dropdownColor: const Color(0xFF0F172A),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'Employee', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
                         items: employees.map((e) => DropdownMenuItem(value: e, child: Text(e.fullName))).toList(),
                         onChanged: (val) {
                           if (val != null) {
@@ -84,7 +101,8 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.access_time),
+                              style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24)),
+                              icon: const Icon(Icons.access_time, color: Color(0xFF38BDF8)),
                               label: Text('Start: ${startTime.format(context)}'),
                               onPressed: () async {
                                 final time = await showTimePicker(context: context, initialTime: startTime);
@@ -95,7 +113,8 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                           const SizedBox(width: 16),
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.access_time),
+                              style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24)),
+                              icon: const Icon(Icons.access_time, color: Color(0xFF38BDF8)),
                               label: Text('End: ${endTime.format(context)}'),
                               onPressed: () async {
                                 final time = await showTimePicker(context: context, initialTime: endTime);
@@ -108,7 +127,8 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                       const SizedBox(height: 16),
                       TextField(
                         controller: siteController,
-                        decoration: const InputDecoration(labelText: 'Site Location', border: OutlineInputBorder()),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'Site Location', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
                       ),
                     ],
                   ),
@@ -117,9 +137,10 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
               actions: [
                 TextButton(
                   onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
                 ),
                 FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF38BDF8), foregroundColor: Colors.black),
                   onPressed: isSaving ? null : () async {
                     if (selectedEmployee == null || siteController.text.trim().isEmpty) return;
                     setDialogState(() => isSaving = true);
@@ -151,8 +172,8 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                     }
                   },
                   child: isSaving 
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Save Shift'),
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Text('Save Shift', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -167,14 +188,25 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
   @override
   Widget build(BuildContext context) {
     final groupedShiftsAsync = ref.watch(shiftsByDayProvider);
+    final staffAsync = ref.watch(staffProvider);
+    final user = ref.watch(authProvider).currentUser;
+    final bool isAdminOrManager = user?.role == 'admin' || user?.role == 'owner' || user?.role == 'system_admin' || user?.role == 'manager';
     final theme = Theme.of(context);
+
+    // Map employee IDs to full names
+    final Map<String, String> employeeNames = {
+      for (var e in staffAsync.value ?? <Employee>[]) e.id: e.fullName
+    };
 
     return Scaffold(
       backgroundColor: theme.colorScheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text('Rosters & Shifts', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text(
+          isAdminOrManager ? 'Team Rosters & Scheduling' : 'My Work Schedule', 
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => context.go('/dashboard'),
@@ -182,14 +214,18 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white70),
+            tooltip: 'Refresh Rosters',
             onPressed: () => ref.refresh(rosterProvider),
           ),
-          const SizedBox(width: 16),
-          FilledButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text('Add Shift'),
-            onPressed: _showAddShiftDialog,
-          ),
+          if (isAdminOrManager) ...[
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF38BDF8), foregroundColor: Colors.black),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Shift', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: _showAddShiftDialog,
+            ),
+          ],
           const SizedBox(width: 16),
         ],
       ),
@@ -295,18 +331,39 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.event_available, size: 64, color: Colors.white24).animate().scale(),
+                              Icon(
+                                isAdminOrManager ? Icons.calendar_today_outlined : Icons.event_busy_outlined, 
+                                size: 64, 
+                                color: Colors.white24,
+                              ).animate().scale(),
                               const SizedBox(height: 16),
-                              Text('No shifts scheduled for this day.', style: GoogleFonts.outfit(fontSize: 18, color: Colors.white54)),
+                              Text(
+                                isAdminOrManager 
+                                    ? 'No shifts scheduled for this day.' 
+                                    : 'No Roster Assigned Yet',
+                                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white70),
+                              ),
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                                child: Text(
+                                  isAdminOrManager
+                                      ? 'Click "Add Shift" above to assign an employee to this date.'
+                                      : 'You have no scheduled shifts for this date. Your manager has not published a roster yet.',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 14, color: Colors.white38),
+                                ),
+                              ),
                             ],
                           ),
                         )
                       : ListView.builder(
-                          key: ValueKey(_selectedDay), // Force list rebuild to re-trigger animations when day changes
+                          key: ValueKey(_selectedDay),
                           itemCount: selectedShifts.length,
                           itemBuilder: (context, index) {
                             final shift = selectedShifts[index];
                             final timeFormat = DateFormat('h:mm a');
+                            final empDisplayName = employeeNames[shift.employeeId] ?? 'Staff (${shift.employeeId.substring(0, 8)})';
                             
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 12.0),
@@ -323,7 +380,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                         shape: BoxShape.circle,
                                         border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
                                       ),
-                                      child: const Icon(Icons.person, color: Color(0xFF60A5FA), size: 20),
+                                      child: const Icon(Icons.badge_outlined, color: Color(0xFF60A5FA), size: 20),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
@@ -331,7 +388,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'UID: ${shift.employeeId.substring(0, 8)}',
+                                            isAdminOrManager ? empDisplayName : 'My Assigned Shift',
                                             style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                                           ),
                                           const SizedBox(height: 4),
@@ -339,7 +396,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                             children: [
                                               const Icon(Icons.access_time, size: 14, color: Colors.white54),
                                               const SizedBox(width: 4),
-                                              Text('${timeFormat.format(shift.startTime)} - ${timeFormat.format(shift.endTime)}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                              Text('${timeFormat.format(shift.startTime.toLocal())} - ${timeFormat.format(shift.endTime.toLocal())}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
                                               const SizedBox(width: 16),
                                               const Icon(Icons.location_on, size: 14, color: Colors.white54),
                                               const SizedBox(width: 4),
@@ -349,7 +406,12 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                         ],
                                       ),
                                     ),
-                                    const Icon(Icons.chevron_right, color: Colors.white24)
+                                    if (isAdminOrManager)
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                                        tooltip: 'Remove Shift',
+                                        onPressed: () => _deleteShift(shift.id),
+                                      ),
                                   ],
                                 ),
                               ),

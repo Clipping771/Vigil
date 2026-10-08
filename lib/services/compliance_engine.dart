@@ -15,6 +15,7 @@ class ComplianceEngine {
     if (shiftDurationHours > maxShiftHours) {
       violations.add(ExceptionRecord(
         id: 'fw-${DateTime.now().millisecondsSinceEpoch}',
+        organizationId: shift.organizationId,
         employeeId: shift.employeeId,
         exceptionType: 'fair_work_violation',
         severity: 'high',
@@ -31,6 +32,7 @@ class ComplianceEngine {
       // For prototype, we flag a warning to ensure breaks are scheduled.
        violations.add(ExceptionRecord(
         id: 'fw-break-${DateTime.now().millisecondsSinceEpoch}',
+        organizationId: shift.organizationId,
         employeeId: shift.employeeId,
         exceptionType: 'compliance_warning',
         severity: 'medium',

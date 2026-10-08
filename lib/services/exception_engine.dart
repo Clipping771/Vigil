@@ -1,9 +1,11 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clock_event.dart';
 import '../models/shift.dart';
 import '../models/exception_record.dart';
 import '../models/leave_request.dart';
+
 class ExceptionEngine {
   static const String _backendUrl = 'http://localhost:8000';
 
@@ -16,7 +18,7 @@ class ExceptionEngine {
     required String organizationId,
   }) async {
     
-    // 0. Push event to the Python AI/ML backend for anomaly detection
+    // 0. Push event to the Python AI/ML backend for anomaly detection if online
     try {
       await http.post(
         Uri.parse('$_backendUrl/ingest'),
@@ -29,9 +31,10 @@ class ExceptionEngine {
           'event_time': event.eventTime.toIso8601String(),
         }),
       );
-    } catch (e) {
-      print('Warning: Failed to reach AI backend: $e');
+    } catch (_) {
+      // Backend is optional/local
     }
+
     // 1. Roster Breach: Clocking in without a scheduled shift
     if (event.eventType == 'clock_in' && scheduledShift == null) {
       return ExceptionRecord(
@@ -64,13 +67,21 @@ class ExceptionEngine {
           );
         }
 
-        // 3. Fair Work Act Compliance: Minimum 30min break for shifts > 5 hours.
-        // In a full implementation, we would query the `breaks` table to see if a break was taken.
-        // For the prototype rule engine, we flag shifts > 5 hours missing a break log.
+        // 3. Fair Work Act Compliance: Minimum 30min break for shifts >= 5 hours.
         final shiftDuration = scheduledShift.endTime.difference(scheduledShift.startTime);
         if (shiftDuration.inHours >= 5) {
-          // Check if break was recorded (simulate failure for demo if we haven't implemented breaks yet)
-          final hasValidBreak = false; // Simulated: no break logged
+          bool hasValidBreak = false;
+          try {
+            final breakResponse = await Supabase.instance.client
+                .from('breaks')
+                .select()
+                .eq('shift_id', scheduledShift.id)
+                .gte('duration_minutes', 30);
+            hasValidBreak = breakResponse.isNotEmpty;
+          } catch (_) {
+            hasValidBreak = false;
+          }
+
           if (!hasValidBreak) {
              return ExceptionRecord(
               id: '', 
@@ -92,7 +103,6 @@ class ExceptionEngine {
   }
 
   /// Evaluates shifts to find missed clock-ins.
-  /// Typically run periodically by a background task or when a manager opens the dashboard.
   static List<ExceptionRecord> detectMissedClockIns({
     required List<Shift> activeShifts, 
     required List<ClockEvent> todayEvents, 
@@ -144,11 +154,8 @@ class ExceptionEngine {
     List<ExceptionRecord> exceptions = [];
 
     for (var shift in upcomingShifts) {
-      // Find if this shift overlaps with any approved leave for the same employee
       for (var leave in approvedLeave) {
         if (shift.employeeId == leave.employeeId && leave.status == 'approved') {
-          // Check for overlap: shift starts before leave ends AND shift ends after leave starts
-          // (Assuming start/end dates for leave are inclusive of the whole day, or precise times)
           if (shift.startTime.isBefore(leave.endDate) && shift.endTime.isAfter(leave.startDate)) {
             exceptions.add(ExceptionRecord(
               id: '',
@@ -161,7 +168,7 @@ class ExceptionEngine {
               description: 'Shift scheduled during approved ${leave.leaveType} leave.',
               createdAt: DateTime.now(),
             ));
-            break; // Record one conflict per shift max
+            break;
           }
         }
       }
@@ -178,7 +185,6 @@ class ExceptionEngine {
   }) {
     List<ExceptionRecord> exceptions = [];
     
-    // Combine and sort shifts by start time
     final allShifts = [...pastShifts, ...upcomingShifts];
     allShifts.sort((a, b) => a.startTime.compareTo(b.startTime));
 
@@ -186,11 +192,9 @@ class ExceptionEngine {
       final prevShift = allShifts[i - 1];
       final currShift = allShifts[i];
 
-      // Only check if it's the same employee
       if (prevShift.employeeId == currShift.employeeId) {
         final restDuration = currShift.startTime.difference(prevShift.endTime);
         
-        // Fair Work Act Minimum Rest is generally 10 hours
         if (restDuration.inHours < 10 && restDuration.inHours >= 0) {
            exceptions.add(ExceptionRecord(
              id: '',
