@@ -509,6 +509,7 @@ BEGIN
   VALUES
   (org1_id, 'Oakleigh HQ', -37.8988, 145.0915, 200.0),
   (org1_id, 'Sydney Branch', -33.8688, 151.2093, 150.0),
+  (org1_id, 'Adelaide Office', -34.8358, 138.6908, 100.0),
   (org2_id, 'Brisbane Warehouse', -27.4698, 153.0251, 300.0);
 
   -- 11. Insert Audit Logs

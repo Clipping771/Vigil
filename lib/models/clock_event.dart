@@ -27,11 +27,11 @@ class ClockEvent {
       organizationId: json['organization_id'],
       employeeId: json['employee_id'],
       eventType: json['event_type'],
-      eventTime: DateTime.parse(json['event_time']),
+      eventTime: DateTime.parse(json['event_time']).toLocal(),
       latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
       longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
       isGeofenced: json['is_geofenced'] ?? false,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']).toLocal() : DateTime.now(),
     );
   }
 }

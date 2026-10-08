@@ -35,13 +35,14 @@ class AttendanceState {
 
   /// Calculates real-time total worked duration including ongoing shift
   Duration get currentLiveDuration {
+    final now = DateTime.now();
     if (status == ShiftStatus.clockedIn && lastClockIn != null) {
-      final ongoing = DateTime.now().difference(lastClockIn!);
+      final ongoing = now.difference(lastClockIn!.toLocal());
       final total = completedWorkedDuration + ongoing;
       return total.isNegative ? Duration.zero : total;
     } else if (status == ShiftStatus.onBreak && lastClockIn != null && activeBreakStart != null) {
       // Frozen at the start of break
-      final ongoingBeforeBreak = activeBreakStart!.difference(lastClockIn!);
+      final ongoingBeforeBreak = activeBreakStart!.toLocal().difference(lastClockIn!.toLocal());
       final total = completedWorkedDuration + ongoingBeforeBreak;
       return total.isNegative ? Duration.zero : total;
     }
@@ -128,14 +129,15 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
 
     try {
       final now = DateTime.now();
-      final todayStart = DateTime(now.year, now.month, now.day).toIso8601String();
+      final todayStartLocal = DateTime(now.year, now.month, now.day);
+      final todayStartUtc = todayStartLocal.toUtc().toIso8601String();
 
       // Fetch today's clock events
       final eventsRes = await _supabase
           .from('clock_events')
           .select()
           .eq('employee_id', user.id)
-          .gte('event_time', todayStart)
+          .gte('event_time', todayStartUtc)
           .order('event_time', ascending: true);
 
       final events = (eventsRes as List).map((e) => ClockEvent.fromJson(e)).toList();
@@ -145,7 +147,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
           .from('breaks')
           .select()
           .eq('employee_id', user.id)
-          .gte('start_time', todayStart)
+          .gte('start_time', todayStartUtc)
           .order('start_time', ascending: true);
 
       final breaks = List<Map<String, dynamic>>.from(breaksRes);
@@ -155,7 +157,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       DateTime? activeBreak;
       for (final b in breaks) {
         if (b['end_time'] == null) {
-          activeBreak = DateTime.tryParse(b['start_time'].toString());
+          activeBreak = DateTime.tryParse(b['start_time'].toString())?.toLocal();
         } else {
           totalBreakMinutes += (b['duration_minutes'] as num?)?.toInt() ?? 0;
         }
@@ -170,14 +172,14 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       DateTime? segmentClockIn;
       for (final event in events) {
         if (event.eventType == 'clock_in') {
-          segmentClockIn = event.eventTime;
-          currentClockIn = event.eventTime;
+          segmentClockIn = event.eventTime.toLocal();
+          currentClockIn = event.eventTime.toLocal();
         } else if (event.eventType == 'clock_out' && segmentClockIn != null) {
-          final diff = event.eventTime.difference(segmentClockIn);
+          final diff = event.eventTime.toLocal().difference(segmentClockIn);
           if (!diff.isNegative) {
             completedWorked += diff;
           }
-          lastClockOut = event.eventTime;
+          lastClockOut = event.eventTime.toLocal();
           segmentClockIn = null;
         }
       }

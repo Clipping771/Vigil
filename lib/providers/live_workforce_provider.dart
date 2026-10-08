@@ -45,12 +45,13 @@ class StaffLiveAttendance {
 
   /// Live ticking duration including ongoing active shift
   Duration get currentDuration {
+    final now = DateTime.now();
     if (status == StaffWorkStatus.clockedIn && shiftStartTime != null) {
-      final ongoing = DateTime.now().difference(shiftStartTime!);
+      final ongoing = now.difference(shiftStartTime!.toLocal());
       final total = completedWorkedDuration + ongoing;
       return total.isNegative ? Duration.zero : total;
     } else if (status == StaffWorkStatus.onBreak && shiftStartTime != null && breakStartTime != null) {
-      final ongoingBeforeBreak = breakStartTime!.difference(shiftStartTime!);
+      final ongoingBeforeBreak = breakStartTime!.toLocal().difference(shiftStartTime!.toLocal());
       final total = completedWorkedDuration + ongoingBeforeBreak;
       return total.isNegative ? Duration.zero : total;
     }
@@ -140,7 +141,8 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
 
     try {
       final now = DateTime.now();
-      final todayStart = DateTime(now.year, now.month, now.day).toIso8601String();
+      final todayStartLocal = DateTime(now.year, now.month, now.day);
+      final todayStartUtc = todayStartLocal.toUtc().toIso8601String();
 
       // 1. Fetch all employees in current organization (or all if system_admin)
       var query = _supabase.from('employees').select();
@@ -159,7 +161,7 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
       var eventsFilter = _supabase
           .from('clock_events')
           .select()
-          .gte('event_time', todayStart);
+          .gte('event_time', todayStartUtc);
 
       if (user.role != 'system_admin') {
         eventsFilter = eventsFilter.eq('organization_id', user.organizationId);
@@ -171,7 +173,7 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
       var breaksFilter = _supabase
           .from('breaks')
           .select()
-          .gte('start_time', todayStart);
+          .gte('start_time', todayStartUtc);
 
       if (user.role != 'system_admin') {
         breaksFilter = breaksFilter.eq('organization_id', user.organizationId);

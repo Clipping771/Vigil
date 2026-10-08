@@ -31,8 +31,8 @@ class ClockService {
         .from('shifts')
         .select()
         .eq('employee_id', user.id)
-        .gte('end_time', now.subtract(const Duration(hours: 12)).toIso8601String())
-        .lte('start_time', now.add(const Duration(hours: 12)).toIso8601String())
+        .gte('end_time', now.toUtc().subtract(const Duration(hours: 12)).toIso8601String())
+        .lte('start_time', now.toUtc().add(const Duration(hours: 12)).toIso8601String())
         .order('start_time')
         .limit(1);
 
@@ -60,7 +60,7 @@ class ClockService {
       'organization_id': clockEvent.organizationId,
       'employee_id': clockEvent.employeeId,
       'event_type': clockEvent.eventType,
-      'event_time': clockEvent.eventTime.toIso8601String(),
+      'event_time': clockEvent.eventTime.toUtc().toIso8601String(),
       'latitude': latitude,
       'longitude': longitude,
       'is_geofenced': isGeofenced,
@@ -115,8 +115,8 @@ class ClockService {
         .from('shifts')
         .select()
         .eq('employee_id', user.id)
-        .gte('end_time', now.subtract(const Duration(hours: 12)).toIso8601String())
-        .lte('start_time', now.add(const Duration(hours: 12)).toIso8601String())
+        .gte('end_time', now.toUtc().subtract(const Duration(hours: 12)).toIso8601String())
+        .lte('start_time', now.toUtc().add(const Duration(hours: 12)).toIso8601String())
         .order('start_time')
         .limit(1);
 
@@ -129,7 +129,7 @@ class ClockService {
       'organization_id': user.organizationId,
       'employee_id': user.id,
       'shift_id': shiftId,
-      'start_time': now.toIso8601String(),
+      'start_time': now.toUtc().toIso8601String(),
       'break_type': breakType,
     });
 
@@ -152,11 +152,11 @@ class ClockService {
 
     if (activeBreaks.isNotEmpty) {
       final breakId = activeBreaks.first['id'];
-      final startTime = DateTime.parse(activeBreaks.first['start_time']);
+      final startTime = DateTime.parse(activeBreaks.first['start_time']).toLocal();
       final duration = now.difference(startTime).inMinutes;
 
       await _supabase.from('breaks').update({
-        'end_time': now.toIso8601String(),
+        'end_time': now.toUtc().toIso8601String(),
         'duration_minutes': duration < 1 ? 1 : duration,
       }).eq('id', breakId);
     }
@@ -174,8 +174,8 @@ class ClockService {
         .from('shifts')
         .select()
         .eq('employee_id', user.id)
-        .gte('end_time', now.subtract(const Duration(hours: 12)).toIso8601String())
-        .lte('start_time', now.add(const Duration(hours: 12)).toIso8601String())
+        .gte('end_time', now.toUtc().subtract(const Duration(hours: 12)).toIso8601String())
+        .lte('start_time', now.toUtc().add(const Duration(hours: 12)).toIso8601String())
         .order('start_time')
         .limit(1);
 
@@ -188,8 +188,8 @@ class ClockService {
       'organization_id': user.organizationId,
       'employee_id': user.id,
       'shift_id': shiftId,
-      'start_time': now.subtract(Duration(minutes: durationMinutes)).toIso8601String(),
-      'end_time': now.toIso8601String(),
+      'start_time': now.subtract(Duration(minutes: durationMinutes)).toUtc().toIso8601String(),
+      'end_time': now.toUtc().toIso8601String(),
       'duration_minutes': durationMinutes,
       'break_type': breakType,
     });
