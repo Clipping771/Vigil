@@ -43,9 +43,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             Container(
               width: 280,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.03),
+                color: Colors.white.withValues(alpha: 0.03),
                 border: Border(
-                  right: BorderSide(color: Colors.white.withOpacity(0.08)),
+                  right: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
                 ),
               ),
               child: Column(
@@ -66,7 +66,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF3B82F6).withOpacity(0.3),
+                                color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -145,7 +145,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                             ),
                             Text(
                               'Super Admin',
-                              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12),
                             ),
                           ],
                         ),
@@ -188,7 +188,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.15) : Colors.transparent,
+        color: isSelected ? const Color(0xFF3B82F6).withValues(alpha: 0.15) : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Material(

@@ -88,7 +88,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
                     'longitude': lng,
                     'radius_meters': rad,
                   });
-                  ref.refresh(geofenceProvider);
+                  ref.invalidate(geofenceProvider);
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Geofence zone added'), backgroundColor: Colors.green));
@@ -110,7 +110,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
   Future<void> _deleteZone(String id) async {
     try {
       await Supabase.instance.client.from('geofence_zones').delete().eq('id', id);
-      ref.refresh(geofenceProvider);
+      ref.invalidate(geofenceProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Zone deleted'), backgroundColor: Colors.green));
       }
@@ -127,7 +127,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -139,7 +139,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white70),
-            onPressed: () => ref.refresh(geofenceProvider),
+            onPressed: () => ref.invalidate(geofenceProvider),
           ),
           const SizedBox(width: 8),
           FilledButton.icon(
@@ -163,7 +163,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
             const SizedBox(height: 8),
             Text(
               'Manage authorized geofence zones where employees can clock in and out.',
-              style: TextStyle(color: Colors.white.withOpacity(0.6)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
             ).animate().fadeIn(delay: 100.ms).slideY(begin: -0.2, end: 0),
             const SizedBox(height: 32),
             Expanded(
@@ -250,9 +250,9 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
           Container(
              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
              decoration: BoxDecoration(
-               color: Colors.green.withOpacity(0.1),
+               color: Colors.green.withValues(alpha: 0.1),
                borderRadius: BorderRadius.circular(8),
-               border: Border.all(color: Colors.green.withOpacity(0.3)),
+               border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
              ),
              child: const Row(
                mainAxisSize: MainAxisSize.min,

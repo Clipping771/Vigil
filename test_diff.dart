@@ -1,10 +1,9 @@
-import 'dart:convert';
+// ignore_for_file: avoid_print
 import 'package:vigil/models/shift.dart';
 import 'package:vigil/models/clock_event.dart';
-import 'package:vigil/models/leave_request.dart';
 import 'package:vigil/services/exception_engine.dart';
 
-void main() {
+Future<void> main() async {
   final orgId = 'org-1';
   final empId = 'emp-1';
   final now = DateTime.parse('2026-08-22T10:00:00Z');
@@ -41,10 +40,8 @@ void main() {
     )
   ];
   
-  final leaves = <LeaveRequest>[];
-
   // Process clock out
-  final ex1 = ExceptionEngine.processClockEvent(
+  final ex1 = await ExceptionEngine.processClockEvent(
     event: events.first,
     scheduledShift: shifts.last,
     allowedLateMinutes: 15,

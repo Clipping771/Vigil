@@ -35,7 +35,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
   Future<void> _deleteShift(String shiftId) async {
     try {
       await Supabase.instance.client.from('shifts').delete().eq('id', shiftId);
-      ref.refresh(rosterProvider);
+      ref.invalidate(rosterProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shift removed successfully.'), backgroundColor: Colors.orange));
       }
@@ -82,7 +82,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<Employee>(
-                        value: selectedEmployee,
+                        initialValue: selectedEmployee,
                         dropdownColor: const Color(0xFF0F172A),
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(labelText: 'Employee', labelStyle: TextStyle(color: Colors.white70), border: OutlineInputBorder()),
@@ -163,10 +163,10 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                         'end_time': endDateTime.toUtc().toIso8601String(),
                       });
                       
-                      if (mounted) Navigator.of(context).pop(true);
+                      if (context.mounted) Navigator.of(context).pop(true);
                     } catch (e) {
                       setDialogState(() => isSaving = false);
-                      if (mounted) {
+                      if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e'), backgroundColor: Colors.red));
                       }
                     }
@@ -181,7 +181,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
         );
       },
     ).then((result) {
-      if (result == true) ref.refresh(rosterProvider);
+      if (result == true) ref.invalidate(rosterProvider);
     });
   }
 
@@ -199,7 +199,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
     };
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -215,7 +215,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white70),
             tooltip: 'Refresh Rosters',
-            onPressed: () => ref.refresh(rosterProvider),
+            onPressed: () => ref.invalidate(rosterProvider),
           ),
           if (isAdminOrManager) ...[
             const SizedBox(width: 8),
@@ -258,12 +258,12 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                       weekendTextStyle: const TextStyle(color: Colors.white70),
                       markerDecoration: const BoxDecoration(color: Color(0xFF00E5FF), shape: BoxShape.circle),
                       selectedDecoration: BoxDecoration(
-                        color: const Color(0xFF7C3AED).withOpacity(0.5),
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.5),
                         shape: BoxShape.circle,
                         border: Border.all(color: const Color(0xFF7C3AED), width: 1.5),
                       ),
                       todayDecoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                        color: Colors.white.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white38),
                       ),
@@ -272,9 +272,9 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                       formatButtonVisible: true,
                       titleCentered: true,
                       formatButtonDecoration: BoxDecoration(
-                        color: const Color(0xFF3B82F6).withOpacity(0.2),
+                        color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.5)),
+                        border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.5)),
                       ),
                       formatButtonTextStyle: const TextStyle(color: Colors.white, fontSize: 12),
                       titleTextStyle: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
@@ -317,7 +317,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: const Color(0xFF00E5FF).withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                      decoration: BoxDecoration(color: const Color(0xFF00E5FF).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
                       child: Text('${selectedShifts.length} Shifts', style: const TextStyle(color: Color(0xFF00E5FF), fontWeight: FontWeight.bold, fontSize: 12)),
                     )
                   ],
@@ -376,9 +376,9 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF3B82F6).withOpacity(0.1),
+                                        color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                                         shape: BoxShape.circle,
-                                        border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
+                                        border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.3)),
                                       ),
                                       child: const Icon(Icons.badge_outlined, color: Color(0xFF60A5FA), size: 20),
                                     ),

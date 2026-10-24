@@ -5,13 +5,13 @@ import '../providers/auth_provider.dart';
 
 final staffProvider = FutureProvider<List<Employee>>((ref) async {
   final currentUser = ref.read(authProvider).currentUser;
-  if (currentUser == null || currentUser.organizationId == null) return [];
+  if (currentUser == null) return [];
 
   final supabase = Supabase.instance.client;
   final response = await supabase
       .from('employees')
       .select()
-      .eq('organization_id', currentUser.organizationId!)
+      .eq('organization_id', currentUser.organizationId)
       .order('full_name', ascending: true);
       
   return response.map((json) => Employee.fromJson(json)).toList();

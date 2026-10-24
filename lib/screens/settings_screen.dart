@@ -208,7 +208,8 @@ class SettingsScreen extends ConsumerWidget {
                     const Text('Select Model', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: settings.availableModels.contains(settings.selectedModel) ? settings.selectedModel : null,
+                      key: ValueKey('${settings.selectedModel}|${settings.availableModels.length}'),
+                      initialValue: settings.availableModels.contains(settings.selectedModel) ? settings.selectedModel : null,
                       hint: const Text('Choose a model'),
                       decoration: const InputDecoration(border: OutlineInputBorder()),
                       items: settings.availableModels.map((model) {

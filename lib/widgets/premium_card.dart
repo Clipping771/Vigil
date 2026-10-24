@@ -34,15 +34,15 @@ class PremiumCard extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: blurRadius, sigmaY: blurRadius),
           child: Container(
             decoration: BoxDecoration(
-              color: baseColor.withOpacity(opacity),
+              color: baseColor.withValues(alpha: opacity),
               borderRadius: BorderRadius.circular(24.0),
               border: Border.all(
-                color: borderColor.withOpacity(0.15),
+                color: borderColor.withValues(alpha: 0.15),
                 width: 1.0,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 20,
                   spreadRadius: -5,
                 ),

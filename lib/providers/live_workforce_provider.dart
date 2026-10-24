@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -269,7 +270,7 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
         isLoading: false,
       );
     } catch (e) {
-      print('Error in loadWorkforce: $e');
+      debugPrint('Error in loadWorkforce: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }

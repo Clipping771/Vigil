@@ -26,7 +26,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
     final currentUser = ref.read(authProvider).currentUser;
     if (currentUser == null) return;
     
-    final String orgId = currentUser.organizationId!;
+    final String orgId = currentUser.organizationId;
 
     if (!mounted) return;
 
@@ -55,7 +55,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        value: selectedRole,
+                        initialValue: selectedRole,
                         decoration: const InputDecoration(labelText: 'Role', border: OutlineInputBorder()),
                         items: const [
                           DropdownMenuItem(value: 'staff', child: Text('Staff')),
@@ -95,10 +95,10 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                         'site_location': siteController.text.trim().isEmpty ? null : siteController.text.trim(),
                       });
                       
-                      if (mounted) Navigator.of(context).pop(true);
+                      if (context.mounted) Navigator.of(context).pop(true);
                     } catch (e) {
                       setDialogState(() => isSaving = false);
-                      if (mounted) {
+                      if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e'), backgroundColor: Colors.red));
                       }
                     }
@@ -113,7 +113,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
         );
       },
     ).then((result) {
-      if (result == true) ref.refresh(staffProvider);
+      if (result == true) ref.invalidate(staffProvider);
     });
   }
 
@@ -131,7 +131,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.refresh(staffProvider),
+            onPressed: () => ref.invalidate(staffProvider),
           ),
           FilledButton.icon(
             icon: const Icon(Icons.add),

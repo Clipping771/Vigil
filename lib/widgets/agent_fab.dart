@@ -60,9 +60,9 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.5)),
+        border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.5)),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF7C3AED).withOpacity(0.2), blurRadius: 30, spreadRadius: 5),
+          BoxShadow(color: const Color(0xFF7C3AED).withValues(alpha: 0.2), blurRadius: 30, spreadRadius: 5),
         ],
       ),
       child: Column(
@@ -72,12 +72,12 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [const Color(0xFF7C3AED).withOpacity(0.2), Colors.transparent],
+                colors: [const Color(0xFF7C3AED).withValues(alpha: 0.2), Colors.transparent],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-              border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
+              border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -111,9 +111,9 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: isAgent ? const Color(0xFF7C3AED).withOpacity(0.15) : Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                      color: isAgent ? const Color(0xFF7C3AED).withValues(alpha: 0.15) : Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isAgent ? const Color(0xFF7C3AED).withOpacity(0.3) : Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+                      border: Border.all(color: isAgent ? const Color(0xFF7C3AED).withValues(alpha: 0.3) : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
                     ),
                     child: Text(msg['text']!, style: const TextStyle(fontSize: 14)),
                   ),
@@ -140,10 +140,10 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
                     onSubmitted: (_) => _submitCommand(),
                     decoration: InputDecoration(
                       hintText: 'Type a command...',
-                      hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5)),
+                      hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.5)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       filled: true,
-                      fillColor: Colors.black.withOpacity(0.1),
+                      fillColor: Colors.black.withValues(alpha: 0.1),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                     ),
                   ),

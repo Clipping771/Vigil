@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/employee.dart';
@@ -58,7 +59,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     } on AuthException catch (e) {
       // PROTOTYPE BACKDOOR: Fallback to mock login if Auth fails (e.g. rate limit or not signed up)
-      print('AuthException: ${e.message} - falling back to mock login');
+      debugPrint('AuthException: ${e.message} - falling back to mock login');
       await _mockLogin(email);
     } catch (e) {
       state = AuthState(isLoading: false, error: 'Login failed: $e');

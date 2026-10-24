@@ -23,7 +23,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -40,7 +40,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           children: [
             Text('Automated Reporting Engine', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)).animate().fadeIn().slideY(begin: -0.2, end: 0),
             const SizedBox(height: 8),
-            Text('Configure scheduled deliveries and export compliance data.', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 16)).animate().fadeIn(delay: 100.ms).slideY(begin: -0.2, end: 0),
+            Text('Configure scheduled deliveries and export compliance data.', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 16)).animate().fadeIn(delay: 100.ms).slideY(begin: -0.2, end: 0),
             const SizedBox(height: 40),
             
             Row(
@@ -73,13 +73,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         children: [
           Row(
             children: [
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF00E5FF).withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3))), child: const Icon(Icons.file_download, color: Color(0xFF00E5FF))),
+              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF00E5FF).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3))), child: const Icon(Icons.file_download, color: Color(0xFF00E5FF))),
               const SizedBox(width: 16),
               Text('Manual Export', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
             ],
           ),
           const SizedBox(height: 24),
-          Text('Instantly export all historical and pending exceptions for audit purposes.', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+          Text('Instantly export all historical and pending exceptions for audit purposes.', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
@@ -90,6 +90,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               onPressed: () async {
                 if (user == null) return;
                 final csvString = await ReportingEngine().generateExceptionsCsv(user.organizationId);
+                if (!context.mounted) return;
                 _showReportPreview(context, 'CSV Data Generated', csvString);
               },
             ),
@@ -104,6 +105,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               onPressed: () async {
                 if (user == null) return;
                 final pdfPayload = await ReportingEngine().generateExceptionsPdfPayload(user.organizationId);
+                if (!context.mounted) return;
                 _showReportPreview(context, 'PDF Render Payload Generated', pdfPayload);
               },
             ),
@@ -126,26 +128,26 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             children: [
               Row(
                 children: [
-                  Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF7C3AED).withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.3))), child: const Icon(Icons.schedule, color: Color(0xFFA78BFA))),
+                  Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF7C3AED).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.3))), child: const Icon(Icons.schedule, color: Color(0xFFA78BFA))),
                   const SizedBox(width: 16),
                   Text('Scheduled Deliveries', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                 ],
               ),
-              Switch(value: true, onChanged: (v){}, activeColor: const Color(0xFF7C3AED)),
+              Switch(value: true, onChanged: (v){}, activeThumbColor: const Color(0xFF7C3AED)),
             ],
           ),
           const SizedBox(height: 24),
-          Text('Automatically compile compliance issues and deliver them securely via email to regional managers and HR.', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+          Text('Automatically compile compliance issues and deliver them securely via email to regional managers and HR.', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
           const SizedBox(height: 32),
-          Text('FREQUENCY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white.withOpacity(0.5), letterSpacing: 1.5)),
+          Text('FREQUENCY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white.withValues(alpha: 0.5), letterSpacing: 1.5)),
           const SizedBox(height: 12),
           SegmentedButton<String>(
             style: SegmentedButton.styleFrom(
               backgroundColor: Colors.transparent,
               foregroundColor: Colors.white,
               selectedForegroundColor: Colors.white,
-              selectedBackgroundColor: const Color(0xFF3B82F6).withOpacity(0.3),
-              side: BorderSide(color: Colors.white.withOpacity(0.2)),
+              selectedBackgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
             ),
             segments: const [
               ButtonSegment(value: 'Daily', label: Text('Daily')),
@@ -158,11 +160,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             },
           ),
           const SizedBox(height: 32),
-          Text('DELIVERY METHOD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white.withOpacity(0.5), letterSpacing: 1.5)),
+          Text('DELIVERY METHOD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white.withValues(alpha: 0.5), letterSpacing: 1.5)),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.1))),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
             child: Row(
               children: [
                 const Icon(Icons.email, size: 20, color: Color(0xFF60A5FA)),

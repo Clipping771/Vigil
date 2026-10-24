@@ -49,7 +49,6 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final siteController = TextEditingController();
-    String selectedRole = 'manager';
     String? selectedOrg = _organizations.isNotEmpty ? _organizations.first['id'] : null;
     bool isSaving = false;
 
@@ -94,7 +93,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        value: 'admin',
+                        initialValue: 'admin',
                         dropdownColor: const Color(0xFF1F2937),
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
@@ -109,7 +108,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        value: selectedOrg,
+                        initialValue: selectedOrg,
                         dropdownColor: const Color(0xFF1F2937),
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
@@ -167,10 +166,10 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                         'site_location': siteController.text.trim().isEmpty ? null : siteController.text.trim(),
                       });
                       
-                      if (mounted) Navigator.of(context).pop(true);
+                      if (context.mounted) Navigator.of(context).pop(true);
                     } catch (e) {
                       setDialogState(() => isSaving = false);
-                      if (mounted) {
+                      if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e'), backgroundColor: Colors.red));
                       }
                     }
@@ -193,7 +192,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     final nameController = TextEditingController(text: user['full_name']);
     final emailController = TextEditingController(text: user['email']);
     final siteController = TextEditingController(text: user['site_location'] ?? '');
-    String selectedRole = user['role'] ?? 'staff';
+    final String selectedRole = user['role'] ?? 'staff';
     String? selectedOrg = user['organization_id'];
     bool isSaving = false;
 
@@ -239,7 +238,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        value: 'admin',
+                        initialValue: 'admin',
                         dropdownColor: const Color(0xFF1F2937),
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
@@ -254,7 +253,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        value: selectedOrg,
+                        initialValue: selectedOrg,
                         dropdownColor: const Color(0xFF1F2937),
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
@@ -300,15 +299,15 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                     try {
                       await _supabase.from('employees').update({
                         'full_name': nameController.text.trim(),
-                        'role': 'admin',
+                        'role': selectedRole,
                         'organization_id': selectedOrg,
                         'site_location': siteController.text.trim().isEmpty ? null : siteController.text.trim(),
                       }).eq('id', user['id']);
                       
-                      if (mounted) Navigator.of(context).pop(true);
+                      if (context.mounted) Navigator.of(context).pop(true);
                     } catch (e) {
                       setDialogState(() => isSaving = false);
-                      if (mounted) {
+                      if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red));
                       }
                     }
@@ -354,7 +353,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                 children: [
                   Text('System Users', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 4),
-                  Text('Manage employees and global administrators across the platform.', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+                  Text('Manage employees and global administrators across the platform.', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
                 ],
               ),
               Row(
@@ -397,30 +396,30 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
                             colors: [
-                              const Color(0xFF3B82F6).withOpacity(0.1),
-                              const Color(0xFF10B981).withOpacity(0.05),
+                              const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                              const Color(0xFF10B981).withValues(alpha: 0.05),
                             ],
                           ),
-                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF3B82F6).withOpacity(0.1),
+                              color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                               blurRadius: 40,
                               spreadRadius: 10,
                             ),
                           ],
                         ),
-                        child: Icon(Icons.people_outline, size: 48, color: const Color(0xFF60A5FA).withOpacity(0.8)),
+                        child: Icon(Icons.people_outline, size: 48, color: const Color(0xFF60A5FA).withValues(alpha: 0.8)),
                       ),
                       const SizedBox(height: 24),
                       Text(
                         'No System Users Yet',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white.withOpacity(0.9)),
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white.withValues(alpha: 0.9)),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Click "Add User" to manually create administrators or managers.',
-                        style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 14),
                       ),
                     ],
                   ),
@@ -441,9 +440,9 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(colors: [const Color(0xFF00E5FF).withOpacity(0.2), const Color(0xFF7C3AED).withOpacity(0.2)]),
+                            gradient: LinearGradient(colors: [const Color(0xFF00E5FF).withValues(alpha: 0.2), const Color(0xFF7C3AED).withValues(alpha: 0.2)]),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                            border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
                           ),
                           child: const Icon(Icons.person, color: Color(0xFF00E5FF)),
                         ),
@@ -454,7 +453,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                             children: [
                               Text(user['full_name'], style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
                               const SizedBox(height: 4),
-                              Text('${user['email']} • Org: ${user['organization_id'].toString().substring(0,8)}', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
+                              Text('${user['email']} • Org: ${user['organization_id'].toString().substring(0,8)}', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13)),
                             ],
                           ),
                         ),
@@ -485,8 +484,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     bool isManager = role == 'manager';
     
     Color textColor = isAdmin ? const Color(0xFFF87171) : (isManager ? const Color(0xFFFBBF24) : const Color(0xFF60A5FA));
-    Color bgColor = isAdmin ? const Color(0xFFEF4444).withOpacity(0.15) : (isManager ? const Color(0xFFF59E0B).withOpacity(0.15) : const Color(0xFF3B82F6).withOpacity(0.15));
-    Color borderColor = isAdmin ? const Color(0xFFEF4444).withOpacity(0.3) : (isManager ? const Color(0xFFF59E0B).withOpacity(0.3) : const Color(0xFF3B82F6).withOpacity(0.3));
+    Color bgColor = isAdmin ? const Color(0xFFEF4444).withValues(alpha: 0.15) : (isManager ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : const Color(0xFF3B82F6).withValues(alpha: 0.15));
+    Color borderColor = isAdmin ? const Color(0xFFEF4444).withValues(alpha: 0.3) : (isManager ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : const Color(0xFF3B82F6).withValues(alpha: 0.3));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

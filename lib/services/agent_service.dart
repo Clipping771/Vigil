@@ -54,6 +54,7 @@ class AgentService {
       }
 
       final data = jsonDecode(cleanJson);
+      if (!context.mounted) return 'Action cancelled: the screen was closed.';
       return await _handleAction(data, context);
     } catch (e) {
       return "Network or parsing error connecting to the agent: $e";

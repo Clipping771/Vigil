@@ -101,7 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           await supabase.from('employees').update({'id': newAuthId}).eq('email', email);
         }
       } catch (e) {
-        print('Signup failed (rate limit expected). Bypassing to mock login...');
+        debugPrint('Signup failed (rate limit expected). Bypassing to mock login...');
         // We ignore the error and proceed to _login(), which will use mock login
       }
 
@@ -146,7 +146,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),

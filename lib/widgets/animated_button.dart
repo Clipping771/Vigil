@@ -78,7 +78,7 @@ class _AnimatedButtonState extends State<AnimatedButton> with SingleTickerProvid
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF00E5FF).withOpacity(0.3),
+                color: const Color(0xFF00E5FF).withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),

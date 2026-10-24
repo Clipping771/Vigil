@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -206,7 +207,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         isLoading: false,
       );
     } catch (e) {
-      print('Error loading attendance: $e');
+      debugPrint('Error loading attendance: $e');
       state = state.copyWith(isLoading: false);
     }
   }

@@ -7,7 +7,7 @@ void main() {
   group('ExceptionEngine Tests', () {
     final now = DateTime.now();
 
-    test('Should return null for a normal clock out on time', () {
+    test('Should return null for a normal clock out on time', () async {
       final shift = Shift(
         id: 'shift-1',
         organizationId: 'org-1',
@@ -27,7 +27,7 @@ void main() {
         createdAt: now,
       );
 
-      final exception = ExceptionEngine.processClockEvent(
+      final exception = await ExceptionEngine.processClockEvent(
         event: event,
         scheduledShift: shift,
         allowedLateMinutes: 15,
@@ -37,7 +37,7 @@ void main() {
       expect(exception, isNull, reason: 'A normal clock out should not trigger an exception.');
     });
 
-    test('Should flag roster_breach when clocking in without a shift', () {
+    test('Should flag roster_breach when clocking in without a shift', () async {
       final event = ClockEvent(
         id: 'evt-2',
         organizationId: 'org-1',
@@ -47,7 +47,7 @@ void main() {
         createdAt: now,
       );
 
-      final exception = ExceptionEngine.processClockEvent(
+      final exception = await ExceptionEngine.processClockEvent(
         event: event,
         scheduledShift: null,
         allowedLateMinutes: 15,
@@ -60,7 +60,7 @@ void main() {
       expect(exception.severity, 'high');
     });
 
-    test('Should flag excessive_overtime when clocking out 45 mins late', () {
+    test('Should flag excessive_overtime when clocking out 45 mins late', () async {
       final shiftEnd = now.subtract(const Duration(minutes: 45));
       final shift = Shift(
         id: 'shift-2',
@@ -81,7 +81,7 @@ void main() {
         createdAt: now,
       );
 
-      final exception = ExceptionEngine.processClockEvent(
+      final exception = await ExceptionEngine.processClockEvent(
         event: event,
         scheduledShift: shift,
         allowedLateMinutes: 15,

@@ -11,7 +11,7 @@ class LandingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       body: Stack(
         children: [
           // Background Glows
@@ -23,9 +23,9 @@ class LandingScreen extends StatelessWidget {
               height: 500,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF00E5FF).withOpacity(0.15),
+                color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
                 boxShadow: [
-                  BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.2), blurRadius: 200, spreadRadius: 100),
+                  BoxShadow(color: const Color(0xFF00E5FF).withValues(alpha: 0.2), blurRadius: 200, spreadRadius: 100),
                 ],
               ),
             ),
@@ -39,9 +39,9 @@ class LandingScreen extends StatelessWidget {
               height: 600,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF7C3AED).withOpacity(0.15),
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
                 boxShadow: [
-                  BoxShadow(color: const Color(0xFF7C3AED).withOpacity(0.2), blurRadius: 200, spreadRadius: 100),
+                  BoxShadow(color: const Color(0xFF7C3AED).withValues(alpha: 0.2), blurRadius: 200, spreadRadius: 100),
                 ],
               ),
             ),
@@ -151,7 +151,7 @@ class LandingScreen extends StatelessWidget {
                 onPressed: () {},
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
                   padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 26),
                   textStyle: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -259,12 +259,12 @@ class _FeatureCard extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: gradientColors.map((c) => c.withOpacity(0.2)).toList(),
+                  colors: gradientColors.map((c) => c.withValues(alpha: 0.2)).toList(),
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: gradientColors[0].withOpacity(0.5)),
+                border: Border.all(color: gradientColors[0].withValues(alpha: 0.5)),
               ),
               child: Icon(icon, color: gradientColors[0], size: 36),
             ),

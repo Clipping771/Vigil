@@ -1,40 +1,294 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/exception_record.dart';
+import '../models/clock_event.dart';
+import '../models/shift.dart';
+import '../models/leave_request.dart';
+import '../services/exception_engine.dart';
+import 'auth_provider.dart';
 
-class ExceptionNotifier extends StateNotifier<AsyncValue<List<ExceptionRecord>>> {
+class ExceptionState {
+  final List<ExceptionRecord> allExceptions;
+  final bool isLoading;
+  final String? error;
+
+  ExceptionState({
+    this.allExceptions = const [],
+    this.isLoading = false,
+    this.error,
+  });
+
+  List<ExceptionRecord> get activeExceptions =>
+      allExceptions.where((e) => !e.isResolved && !e.isIgnored).toList();
+
+  List<ExceptionRecord> get pendingExceptions =>
+      allExceptions.where((e) => e.isPending).toList();
+
+  List<ExceptionRecord> get resolvedExceptions =>
+      allExceptions.where((e) => e.isResolved).toList();
+
+  int get activeCount => activeExceptions.length;
+  int get pendingCount => pendingExceptions.length;
+  int get criticalCount => allExceptions.where((e) => e.isCritical && (e.isPending || e.isAcknowledged)).length;
+  int get highCount => allExceptions.where((e) => e.isHigh && (e.isPending || e.isAcknowledged)).length;
+  int get resolvedCount => resolvedExceptions.length;
+  int get acknowledgedCount => allExceptions.where((e) => e.isAcknowledged).length;
+
+  ExceptionState copyWith({
+    List<ExceptionRecord>? allExceptions,
+    bool? isLoading,
+    String? error,
+  }) {
+    return ExceptionState(
+      allExceptions: allExceptions ?? this.allExceptions,
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
+
+class ExceptionNotifier extends StateNotifier<ExceptionState> {
+  final Ref _ref;
   final _supabase = Supabase.instance.client;
   RealtimeChannel? _subscription;
 
-  ExceptionNotifier() : super(const AsyncValue.loading()) {
+  ExceptionNotifier(this._ref) : super(ExceptionState(isLoading: true)) {
     fetchExceptions();
     _setupRealtime();
   }
 
   void _setupRealtime() {
-    _subscription = _supabase.channel('public_exception_records_feed')
-      ..onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'exception_records',
-        callback: (_) {
-          fetchExceptions();
-        },
-      )
-      ..subscribe();
+    try {
+      _subscription = _supabase.channel('public_exception_records_feed')
+        ..onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'exception_records',
+          callback: (_) {
+            fetchExceptions(silent: true);
+          },
+        )
+        ..subscribe();
+    } catch (_) {
+      // Realtime channel fail-safe
+    }
   }
 
-  Future<void> fetchExceptions() async {
-    try {
-      final response = await _supabase
-          .from('exception_records')
-          .select()
-          .order('created_at', ascending: false);
+  Future<void> fetchExceptions({bool silent = false}) async {
+    final user = _ref.read(authProvider).currentUser;
+    if (user == null) {
+      state = ExceptionState(allExceptions: [], isLoading: false);
+      return;
+    }
 
+    if (!silent) {
+      state = state.copyWith(isLoading: true, error: null);
+    }
+
+    try {
+      // 1. Fetch with joined employee details
+      var query = _supabase.from('exception_records').select('*, employees(full_name, email, role, site_location)');
+
+      if (user.role != 'system_admin') {
+        query = query.eq('organization_id', user.organizationId);
+      }
+
+      final response = await query.order('created_at', ascending: false);
       final list = (response as List).map((json) => ExceptionRecord.fromJson(json)).toList();
-      state = AsyncValue.data(list);
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      state = ExceptionState(allExceptions: list, isLoading: false);
+    } catch (e) {
+      // Fallback: If foreign join is not supported, query plain and map employee details
+      try {
+        var plainQuery = _supabase.from('exception_records').select();
+        if (user.role != 'system_admin') {
+          plainQuery = plainQuery.eq('organization_id', user.organizationId);
+        }
+        final plainRes = await plainQuery.order('created_at', ascending: false);
+
+        final empRes = await _supabase.from('employees').select('id, full_name, email, role, site_location');
+        final Map<String, Map<String, dynamic>> empMap = {};
+        for (var emp in (empRes as List)) {
+          empMap[emp['id'].toString()] = emp;
+        }
+
+        final list = (plainRes as List).map((json) {
+          final emp = empMap[json['employee_id']?.toString()];
+          return ExceptionRecord.fromJson({
+            ...json,
+            'employees': ?emp,
+          });
+        }).toList();
+
+        state = ExceptionState(allExceptions: list, isLoading: false);
+      } catch (err) {
+        state = state.copyWith(isLoading: false, error: err.toString());
+      }
+    }
+  }
+
+  Future<void> resolveException(String id, {String? resolutionNote}) async {
+    try {
+      final now = DateTime.now().toIso8601String();
+      await _supabase.from('exception_records').update({
+        'status': 'resolved',
+        'resolved_at': now,
+        'description': ?resolutionNote,
+      }).eq('id', id);
+
+      // Optimistic update
+      final updated = state.allExceptions.map((ex) {
+        return ex.id == id
+            ? ex.copyWith(
+                status: 'resolved',
+                resolvedAt: DateTime.parse(now),
+                description: resolutionNote ?? ex.description,
+              )
+            : ex;
+      }).toList();
+      state = state.copyWith(allExceptions: updated);
+
+      await fetchExceptions(silent: true);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> acknowledgeException(String id) async {
+    try {
+      await _supabase.from('exception_records').update({
+        'status': 'acknowledged',
+      }).eq('id', id);
+
+      final updated = state.allExceptions.map((ex) {
+        return ex.id == id ? ex.copyWith(status: 'acknowledged') : ex;
+      }).toList();
+      state = state.copyWith(allExceptions: updated);
+
+      await fetchExceptions(silent: true);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> ignoreException(String id, {String? reason}) async {
+    try {
+      await _supabase.from('exception_records').update({
+        'status': 'ignored',
+        'description': ?reason,
+      }).eq('id', id);
+
+      final updated = state.allExceptions.map((ex) {
+        return ex.id == id ? ex.copyWith(status: 'ignored') : ex;
+      }).toList();
+      state = state.copyWith(allExceptions: updated);
+
+      await fetchExceptions(silent: true);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> batchResolve(List<String> ids) async {
+    if (ids.isEmpty) return;
+    try {
+      final now = DateTime.now().toIso8601String();
+      await _supabase
+          .from('exception_records')
+          .update({'status': 'resolved', 'resolved_at': now})
+          .filter('id', 'in', ids);
+
+      await fetchExceptions(silent: true);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Runs an automated Fair Work compliance audit scan across current rosters,
+  /// clock events, and leaves, persisting any detected violations.
+  Future<int> runComplianceScan() async {
+    final user = _ref.read(authProvider).currentUser;
+    if (user == null) return 0;
+
+    final orgId = user.organizationId;
+
+    try {
+      final now = DateTime.now();
+      final dayStart = DateTime(now.year, now.month, now.day).toUtc().toIso8601String();
+
+      // 1. Fetch today's shifts
+      final shiftsRes = await _supabase
+          .from('shifts')
+          .select()
+          .eq('organization_id', orgId)
+          .gte('start_time', dayStart);
+      final shifts = (shiftsRes as List).map((s) => Shift.fromJson(s)).toList();
+
+      // 2. Fetch today's clock events
+      final eventsRes = await _supabase
+          .from('clock_events')
+          .select()
+          .eq('organization_id', orgId)
+          .gte('event_time', dayStart);
+      final events = (eventsRes as List).map((e) => ClockEvent.fromJson(e)).toList();
+
+      // 3. Fetch active leaves
+      final leavesRes = await _supabase
+          .from('leave_requests')
+          .select()
+          .eq('organization_id', orgId)
+          .eq('status', 'approved');
+      final leaves = (leavesRes as List).map((l) => LeaveRequest.fromJson(l)).toList();
+
+      // 4. Run detection engines
+      final missedClockIns = ExceptionEngine.detectMissedClockIns(
+        activeShifts: shifts,
+        todayEvents: events,
+        allowedLateMinutes: 15,
+        organizationId: orgId,
+      );
+
+      final leaveConflicts = ExceptionEngine.detectLeaveConflicts(
+        upcomingShifts: shifts,
+        approvedLeave: leaves,
+        organizationId: orgId,
+      );
+
+      final restBreaches = ExceptionEngine.detectRestBreaches(
+        upcomingShifts: shifts,
+        pastShifts: shifts,
+        organizationId: orgId,
+      );
+
+      final allDetected = [...missedClockIns, ...leaveConflicts, ...restBreaches];
+      int insertedCount = 0;
+
+      for (var detected in allDetected) {
+        // Prevent duplicate insertions for the same employee, shift, and exception_type
+        final existing = state.allExceptions.any((existing) =>
+            existing.employeeId == detected.employeeId &&
+            existing.exceptionType == detected.exceptionType &&
+            existing.shiftId == detected.shiftId &&
+            existing.status != 'resolved');
+
+        if (!existing) {
+          await _supabase.from('exception_records').insert({
+            'organization_id': orgId,
+            'employee_id': detected.employeeId,
+            'exception_type': detected.exceptionType,
+            'severity': detected.severity,
+            'shift_id': detected.shiftId,
+            'status': 'pending',
+            'description': detected.description,
+          });
+          insertedCount++;
+        }
+      }
+
+      await fetchExceptions(silent: true);
+      return insertedCount;
+    } catch (e) {
+      return 0;
     }
   }
 
@@ -45,41 +299,52 @@ class ExceptionNotifier extends StateNotifier<AsyncValue<List<ExceptionRecord>>>
   }
 }
 
-final exceptionStreamProvider = StateNotifierProvider<ExceptionNotifier, AsyncValue<List<ExceptionRecord>>>((ref) {
-  return ExceptionNotifier();
+final exceptionStateProvider = StateNotifierProvider<ExceptionNotifier, ExceptionState>((ref) {
+  return ExceptionNotifier(ref);
 });
 
-// Derived provider for only active (pending or acknowledged) exceptions
-final activeExceptionsProvider = Provider<AsyncValue<List<ExceptionRecord>>>((ref) {
-  final exceptionsAsync = ref.watch(exceptionStreamProvider);
+// Backward-compatible AsyncValue providers
+final exceptionStreamProvider = Provider<AsyncValue<List<ExceptionRecord>>>((ref) {
+  final exState = ref.watch(exceptionStateProvider);
+  if (exState.isLoading && exState.allExceptions.isEmpty) {
+    return const AsyncValue.loading();
+  }
+  if (exState.error != null && exState.allExceptions.isEmpty) {
+    return AsyncValue.error(exState.error!, StackTrace.current);
+  }
+  return AsyncValue.data(exState.allExceptions);
+});
 
-  return exceptionsAsync.whenData((exceptions) {
-    return exceptions.where((ex) => ex.status != 'resolved').toList();
-  });
+final activeExceptionsProvider = Provider<AsyncValue<List<ExceptionRecord>>>((ref) {
+  final exState = ref.watch(exceptionStateProvider);
+  if (exState.isLoading && exState.allExceptions.isEmpty) {
+    return const AsyncValue.loading();
+  }
+  if (exState.error != null && exState.allExceptions.isEmpty) {
+    return AsyncValue.error(exState.error!, StackTrace.current);
+  }
+  return AsyncValue.data(exState.activeExceptions);
 });
 
 class ExceptionService {
   final Ref _ref;
-  final _supabase = Supabase.instance.client;
 
   ExceptionService(this._ref);
 
-  Future<void> resolveException(String id) async {
-    await _supabase
-        .from('exception_records')
-        .update({'status': 'resolved', 'resolved_at': DateTime.now().toIso8601String()})
-        .eq('id', id);
-
-    _ref.read(exceptionStreamProvider.notifier).fetchExceptions();
+  Future<void> resolveException(String id, {String? resolutionNote}) async {
+    await _ref.read(exceptionStateProvider.notifier).resolveException(id, resolutionNote: resolutionNote);
   }
 
   Future<void> acknowledgeException(String id) async {
-    await _supabase
-        .from('exception_records')
-        .update({'status': 'acknowledged'})
-        .eq('id', id);
+    await _ref.read(exceptionStateProvider.notifier).acknowledgeException(id);
+  }
 
-    _ref.read(exceptionStreamProvider.notifier).fetchExceptions();
+  Future<void> ignoreException(String id, {String? reason}) async {
+    await _ref.read(exceptionStateProvider.notifier).ignoreException(id, reason: reason);
+  }
+
+  Future<int> runComplianceScan() async {
+    return await _ref.read(exceptionStateProvider.notifier).runComplianceScan();
   }
 }
 

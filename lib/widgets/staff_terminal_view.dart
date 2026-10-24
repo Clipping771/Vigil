@@ -179,7 +179,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
 
       try {
         if (await Geolocator.isLocationServiceEnabled()) {
-          final pos = await Geolocator.getCurrentPosition(timeLimit: const Duration(seconds: 4));
+          final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(timeLimit: Duration(seconds: 4)));
           lat = pos.latitude;
           lng = pos.longitude;
           isGeofenced = true;
@@ -243,9 +243,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.amberAccent.withOpacity(0.5), width: 2),
+            border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.5), width: 2),
             boxShadow: [
-              BoxShadow(color: Colors.amberAccent.withOpacity(0.15), blurRadius: 40, spreadRadius: -5),
+              BoxShadow(color: Colors.amberAccent.withValues(alpha: 0.15), blurRadius: 40, spreadRadius: -5),
             ],
           ),
           child: Column(
@@ -254,7 +254,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.amberAccent.withOpacity(0.1),
+                  color: Colors.amberAccent.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.event_busy, size: 48, color: Colors.amberAccent),
@@ -308,9 +308,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.amberAccent.withOpacity(0.5), width: 2),
+            border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.5), width: 2),
             boxShadow: [
-              BoxShadow(color: Colors.amberAccent.withOpacity(0.15), blurRadius: 40, spreadRadius: -5),
+              BoxShadow(color: Colors.amberAccent.withValues(alpha: 0.15), blurRadius: 40, spreadRadius: -5),
             ],
           ),
           child: Column(
@@ -319,7 +319,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.amberAccent.withOpacity(0.1),
+                  color: Colors.amberAccent.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.location_off, size: 48, color: Colors.amberAccent),
@@ -339,7 +339,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Row(
@@ -362,7 +362,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white70,
-                        side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -486,7 +486,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                                 boxShadow: [
                                   if (isClockedIn)
                                     BoxShadow(
-                                      color: const Color(0xFF10B981).withOpacity(0.8),
+                                      color: const Color(0xFF10B981).withValues(alpha: 0.8),
                                       blurRadius: 10,
                                       spreadRadius: 2,
                                     ),
@@ -512,9 +512,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withOpacity(0.1)),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                           ),
                           child: Text(
                             DateFormat('EEE, d MMM yyyy').format(DateTime.now()),
@@ -542,7 +542,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                           : (isOnBreak ? 'Shift Paused (Break in Progress)' : 'Total Hours Logged Today'),
                       style: TextStyle(
                         color: isClockedIn 
-                            ? const Color(0xFF10B981).withOpacity(0.9) 
+                            ? const Color(0xFF10B981).withValues(alpha: 0.9) 
                             : (isOnBreak ? Colors.amberAccent : Colors.white54),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -559,9 +559,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(0.12),
+                            color: const Color(0xFF10B981).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.35)),
+                            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.35)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -579,9 +579,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.amberAccent.withOpacity(0.08),
+                            color: Colors.amberAccent.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                            border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.3)),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
@@ -621,7 +621,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                               label: const Text('SCAN QR', style: TextStyle(fontWeight: FontWeight.bold)),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF00E5FF),
-                                side: BorderSide(color: const Color(0xFF00E5FF).withOpacity(0.5)),
+                                side: BorderSide(color: const Color(0xFF00E5FF).withValues(alpha: 0.5)),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               ),
                               onPressed: _showQRScanner,
@@ -639,7 +639,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                             icon: const Icon(Icons.coffee, color: Colors.amberAccent),
                             label: const Text('LOG 30-MIN MEAL BREAK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold)),
                             style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.amberAccent.withOpacity(0.5)),
+                              side: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.5)),
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
@@ -777,7 +777,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: attendance.todayEvents.length,
-                        separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 16),
+                        separatorBuilder: (_, _) => const Divider(color: Colors.white10, height: 16),
                         itemBuilder: (context, index) {
                           final event = attendance.todayEvents[index];
                           final isClockIn = event.eventType == 'clock_in';
@@ -788,8 +788,8 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: isClockIn 
-                                      ? const Color(0xFF10B981).withOpacity(0.15) 
-                                      : Colors.redAccent.withOpacity(0.15),
+                                      ? const Color(0xFF10B981).withValues(alpha: 0.15) 
+                                      : Colors.redAccent.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
@@ -820,7 +820,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.05),
+                                  color: Colors.white.withValues(alpha: 0.05),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
@@ -856,9 +856,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
+        color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
