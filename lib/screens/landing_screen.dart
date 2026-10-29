@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../widgets/app_shell.dart';
 
 class LandingScreen extends StatelessWidget {
@@ -134,7 +133,7 @@ class _Hero extends StatelessWidget {
             ],
           ),
         ],
-      ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.06, end: 0),
+      ),
     );
   }
 }

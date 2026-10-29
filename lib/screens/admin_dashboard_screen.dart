@@ -4,6 +4,7 @@ import '../widgets/app_shell.dart';
 import 'admin_organizations_screen.dart';
 import 'admin_users_screen.dart';
 import 'admin_database_viewer.dart';
+import '../widgets/agent_fab.dart';
 
 /// Platform console for system administrators (tenants, users, raw data).
 class AdminDashboardScreen extends StatelessWidget {
@@ -17,6 +18,7 @@ class AdminDashboardScreen extends StatelessWidget {
         appBar: AppBar(
           leading: ShellMenuButton.maybe(context),
           title: const Text('System Admin'),
+          actions: const [AiAssistantButton(), SizedBox(width: 8)],
           bottom: const TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,

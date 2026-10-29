@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/agent_fab.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -16,7 +17,7 @@ class SettingsScreen extends ConsumerWidget {
     final compact = MediaQuery.sizeOf(context).width < 700;
 
     return Scaffold(
-      appBar: AppBar(leading: ShellMenuButton.maybe(context), title: const Text('Settings')),
+      appBar: AppBar(leading: ShellMenuButton.maybe(context), title: const Text('Settings'), actions: const [AiAssistantButton(), SizedBox(width: 8)]),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(

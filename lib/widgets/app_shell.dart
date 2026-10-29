@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../models/employee.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
-import 'agent_fab.dart';
 
 class NavDestination {
   final String path;
@@ -25,7 +24,7 @@ const appDestinations = [
   NavDestination('/rosters', 'Rosters', Icons.calendar_month_outlined, Icons.calendar_month, _everyone),
   NavDestination('/leave', 'Leave', Icons.event_available_outlined, Icons.event_available, _everyone),
   NavDestination('/staff', 'Staff', Icons.groups_outlined, Icons.groups, _managers),
-  NavDestination('/geofence', 'Geofences', Icons.share_location_outlined, Icons.share_location, _managers),
+  NavDestination('/geofence', 'Work sites', Icons.share_location_outlined, Icons.share_location, _managers),
   NavDestination('/reports', 'Reports', Icons.insert_chart_outlined, Icons.insert_chart, _managers),
   NavDestination('/settings', 'Settings', Icons.settings_outlined, Icons.settings, _everyone),
 ];
@@ -83,12 +82,10 @@ class AppShell extends ConsumerWidget {
       return Scaffold(
         body: Row(
           children: [
-            SizedBox(width: 248, child: sidebar),
-            VerticalDivider(width: 1, color: Theme.of(context).colorScheme.outline),
+            SizedBox(width: 256, child: sidebar),
             Expanded(child: child),
           ],
         ),
-        floatingActionButton: const AgentFAB(),
       );
     }
 
@@ -96,7 +93,6 @@ class AppShell extends ConsumerWidget {
       key: _shellScaffoldKey,
       drawer: Drawer(width: 280, child: SafeArea(child: sidebar)),
       body: child,
-      floatingActionButton: const AgentFAB(),
     );
   }
 }
@@ -124,20 +120,19 @@ class _Sidebar extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+            padding: const EdgeInsets.fromLTRB(24, 20, 20, 16),
             child: Row(
               children: [
                 const BrandMark(size: 32),
                 const SizedBox(width: 12),
-                Text('Vigil', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                Text('Vigil', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
               ],
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               children: [
-                _SectionLabel('Workspace'),
                 for (final d in destinations)
                   _NavTile(
                     destination: d,
@@ -145,8 +140,7 @@ class _Sidebar extends ConsumerWidget {
                     onTap: () => go(d.path),
                   ),
                 if (user.isSystemAdmin) ...[
-                  const SizedBox(height: 12),
-                  _SectionLabel('Platform'),
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16), child: Divider()),
                   _NavTile(
                     destination: const NavDestination('/admin', 'System Admin', Icons.admin_panel_settings_outlined,
                         Icons.admin_panel_settings, _systemAdmins),
@@ -157,26 +151,13 @@ class _Sidebar extends ConsumerWidget {
               ],
             ),
           ),
-          Divider(height: 1, color: scheme.outline),
+          Divider(height: 1, color: scheme.outlineVariant),
           Padding(
             padding: const EdgeInsets.all(12),
             child: _UserMenu(user: user),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-      child: Text(text.toUpperCase(), style: Theme.of(context).textTheme.labelSmall),
     );
   }
 }
@@ -191,28 +172,28 @@ class _NavTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
+    final fg = selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Material(
-        color: selected ? scheme.primary.withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        color: selected ? scheme.secondaryContainer : Colors.transparent,
+        shape: const StadiumBorder(),
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          customBorder: const StadiumBorder(),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: SizedBox(
+            height: 48,
             child: Row(
               children: [
-                Icon(selected ? destination.selectedIcon : destination.icon, size: 20, color: color),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
+                Icon(selected ? destination.selectedIcon : destination.icon, size: 22, color: fg),
+                const SizedBox(width: 14),
                 Text(
                   destination.label,
-                  style: TextStyle(
-                    color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    fontSize: 14,
-                  ),
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: selected ? scheme.onSecondaryContainer : scheme.onSurface,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
                 ),
               ],
             ),
@@ -282,7 +263,7 @@ class _UserMenu extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(user.fullName, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      style: theme.textTheme.labelLarge),
                   Text(roleLabel(user.role), style: theme.textTheme.bodySmall),
                 ],
               ),
@@ -316,10 +297,16 @@ class UserAvatar extends StatelessWidget {
     final initials = parts.isEmpty
         ? '?'
         : (parts.first[0] + (parts.length > 1 ? parts.last[0] : '')).toUpperCase();
+    // Stable per-person colour, like Google account avatars.
+    const palette = [
+      Color(0xFF1A73E8), Color(0xFFD93025), Color(0xFF188038), Color(0xFFE37400),
+      Color(0xFF9334E6), Color(0xFF007B83), Color(0xFFC5221F), Color(0xFF1967D2),
+    ];
+    final color = palette[name.codeUnits.fold<int>(0, (a, c) => a + c) % palette.length];
     return CircleAvatar(
       radius: radius,
-      backgroundColor: scheme.primary.withValues(alpha: 0.16),
-      child: Text(initials, style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700, fontSize: radius * 0.7)),
+      backgroundColor: scheme.brightness == Brightness.dark ? color.withValues(alpha: 0.85) : color,
+      child: Text(initials, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: radius * 0.75)),
     );
   }
 }
@@ -331,19 +318,14 @@ class BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(size * 0.28),
-        gradient: LinearGradient(
-          colors: [scheme.primary, Color.lerp(scheme.primary, scheme.secondary, 0.6)!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: const Color(0xFF1A73E8),
       ),
-      child: Icon(Icons.shield_outlined, size: size * 0.6, color: scheme.onPrimary),
+      child: Icon(Icons.shield_outlined, size: size * 0.6, color: Colors.white),
     );
   }
 }

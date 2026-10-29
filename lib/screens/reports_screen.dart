@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/reporting_engine.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/agent_fab.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -203,7 +204,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(leading: ShellMenuButton.maybe(context), title: const Text('Reports')),
+      appBar: AppBar(leading: ShellMenuButton.maybe(context), title: const Text('Reports'), actions: const [AiAssistantButton(), SizedBox(width: 8)]),
       body: ListView(
         padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 700 ? 16 : 28),
         children: [

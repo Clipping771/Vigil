@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/staff_provider.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/auth_layout.dart' show validateEmail;
+import '../widgets/agent_fab.dart';
 
 class StaffDirectoryScreen extends ConsumerStatefulWidget {
   const StaffDirectoryScreen({super.key});
@@ -184,6 +185,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
         title: const Text('Staff'),
         actions: [
           IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: () => ref.invalidate(staffProvider)),
+          const AiAssistantButton(),
           const SizedBox(width: 8),
         ],
       ),

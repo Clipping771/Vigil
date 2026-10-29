@@ -43,7 +43,6 @@ dependencies:
   uuid: ^4.6.0
   shared_preferences: ^2.5.5
   http: ^1.6.0
-  flutter_animate: ^4.5.2
   geolocator: ^14.0.3
   mobile_scanner: ^7.4.0
   table_calendar: ^3.2.1

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../widgets/premium_card.dart';
-import '../widgets/animated_button.dart';
-import '../theme/ui.dart';
+import '../providers/auth_provider.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/auth_layout.dart' show validateEmail;
+import '../widgets/ui_kit.dart';
 
+const _roles = ['owner', 'admin', 'hr', 'manager', 'staff', 'system_admin'];
+
+/// Platform-wide user management for system administrators.
 class AdminUsersScreen extends ConsumerStatefulWidget {
   const AdminUsersScreen({super.key});
 
@@ -15,509 +17,282 @@ class AdminUsersScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
-  bool _isLoading = true;
+  final _db = Supabase.instance.client;
+  bool _loading = true;
+  bool _failed = false;
   List<Map<String, dynamic>> _users = [];
-  List<Map<String, dynamic>> _organizations = [];
-  final _supabase = Supabase.instance.client;
+  Map<String, String> _orgNames = {};
+  String _query = '';
+  String? _orgFilter;
 
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    _load();
   }
 
-  Future<void> _fetchData() async {
-    setState(() => _isLoading = true);
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     try {
-      final userResponse = await _supabase.from('employees').select().order('created_at', ascending: false);
-      final orgResponse = await _supabase.from('organizations').select();
-      
+      final users = await _db.from('employees').select().order('full_name');
+      final orgs = await _db.from('organizations').select('id, name').order('name');
+      if (!mounted) return;
       setState(() {
-        _users = List<Map<String, dynamic>>.from(userResponse);
-        _organizations = List<Map<String, dynamic>>.from(orgResponse);
+        _users = List<Map<String, dynamic>>.from(users);
+        _orgNames = {for (final o in orgs) o['id'] as String: o['name'] as String};
       });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
-      }
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
     } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _showAddUserDialog() async {
-    final nameController = TextEditingController();
-    final emailController = TextEditingController();
-    final siteController = TextEditingController();
-    String? selectedOrg = _organizations.isNotEmpty ? _organizations.first['id'] : null;
-    bool isSaving = false;
-
-    if (_organizations.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please create an organization first.')));
-      return;
-    }
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: context.surfaceHigh,
-              title: Text('Add System User', style: TextStyle(color: context.fg())),
-              content: SizedBox(
-                width: 400,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Full Name',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: emailController,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Email Address',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        initialValue: 'admin',
-                        dropdownColor: context.surfaceHigh,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Role',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'admin', child: Text('Company Admin')),
-                        ],
-                        onChanged: null, // Locked for System Admin
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedOrg,
-                        dropdownColor: context.surfaceHigh,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Organization',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        items: _organizations.map<DropdownMenuItem<String>>((org) {
-                          return DropdownMenuItem<String>(
-                            value: org['id'],
-                            child: Text(org['name']),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setDialogState(() => selectedOrg = val);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: siteController,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Site Location (Optional)',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text('The new admin activates their account from the sign-in page using this email.', style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
-                  onPressed: isSaving ? null : () async {
-                    if (nameController.text.trim().isEmpty || emailController.text.trim().isEmpty) return;
-                    setDialogState(() => isSaving = true);
-                    
-                    try {
-                      await _supabase.from('employees').insert({
-                        'email': emailController.text.trim().toLowerCase(),
-                        'full_name': nameController.text.trim(),
-                        'role': 'admin',
-                        'organization_id': selectedOrg,
-                        'site_location': siteController.text.trim().isEmpty ? null : siteController.text.trim(),
-                      });
-                      
-                      if (context.mounted) Navigator.of(context).pop(true);
-                    } catch (e) {
-                      setDialogState(() => isSaving = false);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red));
-                      }
-                    }
-                  },
-                  child: isSaving 
-                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg()))
-                    : const Text('Add User'),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    ).then((result) {
-      if (result == true) _fetchData();
-    });
-  }
-
-  Future<void> _showEditUserDialog(Map<String, dynamic> user) async {
-    final nameController = TextEditingController(text: user['full_name']);
-    final emailController = TextEditingController(text: user['email']);
-    final siteController = TextEditingController(text: user['site_location'] ?? '');
-    final String selectedRole = user['role'] ?? 'staff';
-    String? selectedOrg = user['organization_id'];
-    bool isSaving = false;
-
-    if (_organizations.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please create an organization first.')));
-      return;
-    }
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: context.surfaceHigh,
-              title: Text('Edit System User', style: TextStyle(color: context.fg())),
-              content: SizedBox(
-                width: 400,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Full Name',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: emailController,
-                        style: TextStyle(color: context.fg()),
-                        enabled: false, // Cannot edit email in this simplified view without full auth api access
-                        decoration: InputDecoration(
-                          labelText: 'Email Address (Cannot Edit)',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        initialValue: 'admin',
-                        dropdownColor: context.surfaceHigh,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Role',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'admin', child: Text('Company Admin')),
-                        ],
-                        onChanged: null, // Locked for System Admin
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedOrg,
-                        dropdownColor: context.surfaceHigh,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Organization',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        items: _organizations.map<DropdownMenuItem<String>>((org) {
-                          return DropdownMenuItem<String>(
-                            value: org['id'],
-                            child: Text(org['name']),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setDialogState(() => selectedOrg = val);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: siteController,
-                        style: TextStyle(color: context.fg()),
-                        decoration: InputDecoration(
-                          labelText: 'Site Location (Optional)',
-                          labelStyle: TextStyle(color: context.fg(0.7)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
-                  onPressed: isSaving ? null : () async {
-                    if (nameController.text.trim().isEmpty) return;
-                    setDialogState(() => isSaving = true);
-                    
-                    try {
-                      await _supabase.from('employees').update({
-                        'full_name': nameController.text.trim(),
-                        'role': selectedRole,
-                        'organization_id': selectedOrg,
-                        'site_location': siteController.text.trim().isEmpty ? null : siteController.text.trim(),
-                      }).eq('id', user['id']);
-                      
-                      if (context.mounted) Navigator.of(context).pop(true);
-                    } catch (e) {
-                      setDialogState(() => isSaving = false);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
-                      }
-                    }
-                  },
-                  child: isSaving 
-                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg()))
-                    : const Text('Save Changes'),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    ).then((result) {
-      if (result == true) _fetchData();
-    });
-  }
-
-  Future<void> _deleteUser(String id) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete user?'),
-        content: const Text('Their shifts, punches and leave history will also be deleted. This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      await _supabase.from('employees').delete().eq('id', id);
-      _fetchData();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User deleted')));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    final t = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final me = ref.watch(authProvider).currentUser;
+    final pad = isCompact(context) ? 16.0 : 32.0;
 
-    return Padding(
-      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 700 ? 16 : 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 16,
-            runSpacing: 12,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('System Users', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: context.fg())),
-                  const SizedBox(height: 4),
-                  Text('Manage employees and global administrators across the platform.', style: TextStyle(color: context.fg().withValues(alpha: 0.6))),
-                ],
-              ),
-              Row(
-                children: [
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B82F6),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add User', style: TextStyle(fontWeight: FontWeight.bold)),
-                    onPressed: _showAddUserDialog,
+    final visible = _users.where((u) {
+      if (_orgFilter != null && u['organization_id'] != _orgFilter) return false;
+      if (_query.isEmpty) return true;
+      final q = _query.toLowerCase();
+      return '${u['full_name']} ${u['email']}'.toLowerCase().contains(q);
+    }).toList();
+
+    return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'admin-add-user',
+        onPressed: _orgNames.isEmpty ? null : () => _editUser(null),
+        icon: const Icon(Icons.person_add_alt_1),
+        label: const Text('Add user'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(pad, 16, pad, 96),
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: isCompact(context) ? double.infinity : 320,
+                  child: SearchBar(
+                    hintText: 'Search name or email',
+                    leading: const Icon(Icons.search),
+                    elevation: const WidgetStatePropertyAll(0),
+                    side: WidgetStatePropertyAll(BorderSide(color: cs.outline)),
+                    backgroundColor: WidgetStatePropertyAll(cs.surface),
+                    constraints: const BoxConstraints(minHeight: 44, maxHeight: 44),
+                    onChanged: (v) => setState(() => _query = v.trim()),
                   ),
-                  const SizedBox(width: 16),
-                  SizedBox(
-                    width: 160,
-                    height: 48,
-                    child: AnimatedButton(
-                      text: 'Refresh Users',
-                      onPressed: _fetchData,
-                    ),
-                  ),
-                ],
-              )
-            ],
-          ).animate().fadeIn().slideY(begin: -0.2, end: 0),
-          const SizedBox(height: 24),
-          Expanded(
-            child: _users.isEmpty 
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                              const Color(0xFF10B981).withValues(alpha: 0.05),
-                            ],
-                          ),
-                          border: Border.all(color: context.fg().withValues(alpha: 0.05)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                              blurRadius: 40,
-                              spreadRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Icon(Icons.people_outline, size: 48, color: const Color(0xFF3B82F6).withValues(alpha: 0.8)),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'No System Users Yet',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: context.fg().withValues(alpha: 0.9)),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Click "Add User" to manually create administrators or managers.',
-                        style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 14),
-                      ),
+                ),
+                SizedBox(
+                  width: isCompact(context) ? double.infinity : 260,
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: _orgFilter,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Organization', isDense: true),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('All organizations')),
+                      for (final e in _orgNames.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
                     ],
+                    onChanged: (v) => setState(() => _orgFilter = v),
                   ),
-                )
-              : ListView.builder(
-              itemCount: _users.length,
-              itemBuilder: (context, index) {
-                final user = _users[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: PremiumCard(
-                    blurRadius: 10,
-                    opacity: 0.05,
-                    padding: const EdgeInsets.all(20.0),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(colors: [const Color(0xFF06B6D4).withValues(alpha: 0.2), const Color(0xFF7C3AED).withValues(alpha: 0.2)]),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF06B6D4).withValues(alpha: 0.3)),
+                ),
+                Text('${visible.length} users', style: t.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_loading)
+              const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))
+            else if (_failed)
+              Card(child: EmptyState(icon: Icons.cloud_off_outlined, title: 'Could not load users', action: OutlinedButton(onPressed: _load, child: const Text('Try again'))))
+            else if (visible.isEmpty)
+              const Card(child: EmptyState(icon: Icons.person_search_outlined, title: 'No users found'))
+            else
+              Card(
+                child: Column(
+                  children: [
+                    for (var i = 0; i < visible.length; i++) ...[
+                      if (i > 0) const Divider(indent: 72),
+                      Builder(builder: (context) {
+                        final u = visible[i];
+                        final isMe = u['id'] == me?.id;
+                        return ListTile(
+                          contentPadding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+                          leading: UserAvatar(name: u['full_name'] ?? '?', radius: 20),
+                          title: Text(u['full_name'] ?? '', style: t.titleSmall),
+                          subtitle: Text(
+                            '${u['email']}  ·  ${_orgNames[u['organization_id']] ?? 'Unknown organization'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                           ),
-                          child: const Icon(Icons.person, color: Color(0xFF06B6D4)),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(user['full_name'], style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: context.fg())),
-                              const SizedBox(height: 4),
-                              Text('${user['email']} • Org: ${user['organization_id'].toString().substring(0,8)}', style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 13)),
+                              if (!isCompact(context))
+                                StatusChip(roleLabel(u['role'] ?? 'staff'),
+                                    tone: u['role'] == 'system_admin' ? Tone.danger : (const {'owner', 'admin'}.contains(u['role']) ? Tone.primary : Tone.neutral)),
+                              if (u['auth_user_id'] == null && !isCompact(context)) ...[
+                                const SizedBox(width: 8),
+                                const Tooltip(message: 'Invited — has not signed in yet', child: StatusChip('Invited', tone: Tone.warning)),
+                              ],
+                              PopupMenuButton<String>(
+                                tooltip: 'More',
+                                onSelected: (v) => v == 'edit' ? _editUser(u) : _delete(u),
+                                itemBuilder: (_) => [
+                                  const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit'))),
+                                  if (!isMe)
+                                    const PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete'))),
+                                ],
+                              ),
                             ],
                           ),
-                        ),
-                        _buildBadge(user['role'] ?? 'staff'),
-                        const SizedBox(width: 32),
-                        IconButton(
-                          icon: Icon(Icons.edit, color: context.fg(0.54)),
-                          onPressed: () => _showEditUserDialog(user),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Color(0xFFFF3366)),
-                          onPressed: () => _deleteUser(user['id']),
-                        ),
-                      ],
-                    ),
-                  ),
-                ).animate().fadeIn(delay: (50 * index).ms).slideX(begin: 0.1, end: 0);
-              },
-            ),
-          )
-        ],
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildBadge(String role) {
-    bool isAdmin = role == 'system_admin';
-    bool isManager = role == 'manager';
-    
-    Color textColor = isAdmin ? const Color(0xFFF87171) : (isManager ? const Color(0xFFFBBF24) : const Color(0xFF3B82F6));
-    Color bgColor = isAdmin ? const Color(0xFFEF4444).withValues(alpha: 0.15) : (isManager ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : const Color(0xFF3B82F6).withValues(alpha: 0.15));
-    Color borderColor = isAdmin ? const Color(0xFFEF4444).withValues(alpha: 0.3) : (isManager ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : const Color(0xFF3B82F6).withValues(alpha: 0.3));
+  Future<void> _editUser(Map<String, dynamic>? user) async {
+    final formKey = GlobalKey<FormState>();
+    final name = TextEditingController(text: user?['full_name']);
+    final email = TextEditingController(text: user?['email']);
+    final site = TextEditingController(text: user?['site_location']);
+    var role = (user?['role'] as String?) ?? 'admin';
+    var org = (user?['organization_id'] as String?) ?? _orgFilter ?? _orgNames.keys.first;
+    var saving = false;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
-      ),
-      child: Text(
-        role.replaceAll('_', ' ').toUpperCase(),
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: Text(user == null ? 'Add user' : 'Edit user'),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      controller: name,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(labelText: 'Full name'),
+                      validator: (v) => (v == null || v.trim().length < 2) ? 'Enter a name' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: email,
+                      enabled: user == null,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      validator: validateEmail,
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      initialValue: org,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Organization'),
+                      items: [for (final e in _orgNames.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                      onChanged: (v) => setLocal(() => org = v ?? org),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      initialValue: role,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Role'),
+                      items: [for (final r in _roles) DropdownMenuItem(value: r, child: Text(roleLabel(r)))],
+                      onChanged: (v) => setLocal(() => role = v ?? role),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: site, decoration: const InputDecoration(labelText: 'Site (optional)')),
+                    if (user == null) ...[
+                      const SizedBox(height: 16),
+                      Text('They join by choosing "Activate your account" on the sign-in page with this email.',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: saving ? null : () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (!(formKey.currentState?.validate() ?? false)) return;
+                      setLocal(() => saving = true);
+                      final data = {
+                        'full_name': name.text.trim(),
+                        'role': role,
+                        'organization_id': org,
+                        'site_location': site.text.trim().isEmpty ? null : site.text.trim(),
+                      };
+                      try {
+                        if (user == null) {
+                          await _db.from('employees').insert({...data, 'email': email.text.trim().toLowerCase()});
+                        } else {
+                          await _db.from('employees').update(data).eq('id', user['id']);
+                        }
+                        if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                        if (mounted) showMessage(this.context, user == null ? 'User added.' : 'Changes saved.');
+                        _load();
+                      } catch (e) {
+                        setLocal(() => saving = false);
+                        final msg = e is PostgrestException && e.code == '23505'
+                            ? 'A user with this email already exists in that organization.'
+                            : 'Could not save. ${e is PostgrestException ? e.message : ''}';
+                        if (mounted) showMessage(this.context, msg);
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(user == null ? 'Add user' : 'Save'),
+            ),
+          ],
         ),
       ),
     );
+    for (final c in [name, email, site]) {
+      c.dispose();
+    }
+  }
+
+  Future<void> _delete(Map<String, dynamic> user) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Delete ${user['full_name']}?',
+      message: 'Their shifts, punches and leave history will also be deleted. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    );
+    if (!ok) return;
+    try {
+      await _db.from('employees').delete().eq('id', user['id']);
+      if (mounted) showMessage(context, 'User deleted.');
+      _load();
+    } catch (_) {
+      if (mounted) showMessage(context, 'Could not delete this user.');
+    }
   }
 }

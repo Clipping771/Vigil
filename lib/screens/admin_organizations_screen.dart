@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../theme/ui.dart';
+import '../widgets/ui_kit.dart';
 
+const _plans = {'freemium': 'Free', 'pro': 'Pro', 'enterprise': 'Enterprise'};
+
+/// Tenant management for system administrators.
 class AdminOrganizationsScreen extends ConsumerStatefulWidget {
   const AdminOrganizationsScreen({super.key});
 
@@ -11,401 +15,214 @@ class AdminOrganizationsScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _organizations = [];
-  final _supabase = Supabase.instance.client;
+  final _db = Supabase.instance.client;
+  bool _loading = true;
+  bool _failed = false;
+  List<Map<String, dynamic>> _orgs = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchOrganizations();
+    _load();
   }
 
-  Future<void> _fetchOrganizations() async {
-    setState(() => _isLoading = true);
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     try {
-      final response = await _supabase.from('organizations').select().order('created_at', ascending: false);
-      setState(() {
-        _organizations = List<Map<String, dynamic>>.from(response);
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
-      }
+      final res = await _db.from('organizations').select('*, employees(count)').order('created_at', ascending: false);
+      if (mounted) setState(() => _orgs = List<Map<String, dynamic>>.from(res));
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _showAddOrganizationDialog() async {
-    final nameController = TextEditingController();
-    String selectedPlan = 'pro';
-    bool isSaving = false;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: context.surfaceHigh,
-              title: Text('Add Organization', style: TextStyle(color: context.fg())),
-              content: SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      style: TextStyle(color: context.fg()),
-                      decoration: InputDecoration(
-                        labelText: 'Organization Name',
-                        labelStyle: TextStyle(color: context.fg(0.7)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedPlan,
-                      dropdownColor: context.surfaceHigh,
-                      style: TextStyle(color: context.fg()),
-                      decoration: InputDecoration(
-                        labelText: 'Subscription Plan',
-                        labelStyle: TextStyle(color: context.fg(0.7)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'freemium', child: Text('Freemium')),
-                        DropdownMenuItem(value: 'pro', child: Text('Pro')),
-                        DropdownMenuItem(value: 'enterprise', child: Text('Enterprise')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setDialogState(() => selectedPlan = val);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
-                  onPressed: isSaving ? null : () async {
-                    if (nameController.text.trim().isEmpty) return;
-                    setDialogState(() => isSaving = true);
-                    
-                    try {
-                      await _supabase.from('organizations').insert({
-                        'name': nameController.text.trim(),
-                        'subscription_plan': selectedPlan,
-                      });
-                      if (context.mounted) Navigator.of(context).pop(true);
-                    } catch (e) {
-                      setDialogState(() => isSaving = false);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
-                      }
-                    }
-                  },
-                  child: isSaving 
-                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg()))
-                    : const Text('Save Organization'),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    ).then((result) {
-      if (result == true) _fetchOrganizations();
-    });
-  }
-
-  Future<void> _showEditOrganizationDialog(Map<String, dynamic> org) async {
-    final nameController = TextEditingController(text: org['name']);
-    String selectedPlan = org['subscription_plan'] ?? 'pro';
-    bool isSaving = false;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: context.surfaceHigh,
-              title: Text('Edit Organization', style: TextStyle(color: context.fg())),
-              content: SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      style: TextStyle(color: context.fg()),
-                      decoration: InputDecoration(
-                        labelText: 'Organization Name',
-                        labelStyle: TextStyle(color: context.fg(0.7)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedPlan,
-                      dropdownColor: context.surfaceHigh,
-                      style: TextStyle(color: context.fg()),
-                      decoration: InputDecoration(
-                        labelText: 'Subscription Plan',
-                        labelStyle: TextStyle(color: context.fg(0.7)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'freemium', child: Text('Freemium')),
-                        DropdownMenuItem(value: 'pro', child: Text('Pro')),
-                        DropdownMenuItem(value: 'enterprise', child: Text('Enterprise')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setDialogState(() => selectedPlan = val);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
-                  onPressed: isSaving ? null : () async {
-                    if (nameController.text.trim().isEmpty) return;
-                    setDialogState(() => isSaving = true);
-                    
-                    try {
-                      await _supabase.from('organizations').update({
-                        'name': nameController.text.trim(),
-                        'subscription_plan': selectedPlan,
-                      }).eq('id', org['id']);
-                      if (context.mounted) Navigator.of(context).pop(true);
-                    } catch (e) {
-                      setDialogState(() => isSaving = false);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
-                      }
-                    }
-                  },
-                  child: isSaving 
-                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg()))
-                    : const Text('Save Changes'),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    ).then((result) {
-      if (result == true) _fetchOrganizations();
-    });
-  }
-
-  Future<void> _deleteOrganization(String id) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete organization?'),
-        content: const Text('All of its employees and data will be permanently deleted. This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      await _supabase.from('organizations').delete().eq('id', id);
-      _fetchOrganizations();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Organization deleted')));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
-    }
+  int _memberCount(Map<String, dynamic> org) {
+    final e = org['employees'];
+    if (e is List && e.isNotEmpty && e.first is Map) return (e.first['count'] as num?)?.toInt() ?? 0;
+    return 0;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    final t = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final pad = isCompact(context) ? 16.0 : 32.0;
 
-    return Padding(
-      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 700 ? 16 : 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 16,
-            runSpacing: 12,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Organizations', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: context.fg())),
-                  const SizedBox(height: 4),
-                  Text('Manage tenant organizations and billing plans.', style: TextStyle(color: context.fg().withValues(alpha: 0.6))),
-                ],
-              ),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'admin-add-org',
+        onPressed: () => _edit(null),
+        icon: const Icon(Icons.add_business_outlined),
+        label: const Text('Add organization'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(pad, 16, pad, 96),
+          children: [
+            ResponsiveGrid(
+              minItemWidth: 150,
+              children: [
+                StatTile(icon: Icons.business_outlined, label: 'Organizations', value: '${_orgs.length}', tone: Tone.primary),
+                StatTile(
+                  icon: Icons.groups_outlined,
+                  label: 'Total users',
+                  value: '${_orgs.fold<int>(0, (s, o) => s + _memberCount(o))}',
+                  tone: Tone.info,
                 ),
-                icon: const Icon(Icons.add),
-                label: const Text('Add Organization', style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: _showAddOrganizationDialog,
-              )
-            ],
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: _organizations.isEmpty 
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                              const Color(0xFF8B5CF6).withValues(alpha: 0.05),
-                            ],
-                          ),
-                          border: Border.all(color: context.fg().withValues(alpha: 0.05)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                              blurRadius: 40,
-                              spreadRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Icon(Icons.business_outlined, size: 48, color: const Color(0xFF3B82F6).withValues(alpha: 0.8)),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'No Organizations Yet',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: context.fg().withValues(alpha: 0.9)),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Get started by creating your first tenant organization.',
-                        style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 14),
-                      ),
-                      const SizedBox(height: 32),
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF3B82F6),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Create Organization', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: _showAddOrganizationDialog,
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-              itemCount: _organizations.length,
-              itemBuilder: (context, index) {
-                final org = _organizations[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: context.surfaceHigh,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: context.fg().withValues(alpha: 0.05)),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.business, color: Color(0xFF3B82F6)),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(org['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: context.fg())),
-                              const SizedBox(height: 4),
-                              Text('ID: ${org['id']}', style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 13)),
-                            ],
-                          ),
-                        ),
-                        _buildBadge(org['subscription_plan'] ?? 'pro'),
-                        const SizedBox(width: 32),
-                        IconButton(
-                          icon: Icon(Icons.edit, color: context.fg(0.54)),
-                          onPressed: () => _showEditOrganizationDialog(org),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)),
-                          onPressed: () => _deleteOrganization(org['id']),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                StatTile(
+                  icon: Icons.workspace_premium_outlined,
+                  label: 'Paid plans',
+                  value: '${_orgs.where((o) => o['subscription_plan'] != 'freemium').length}',
+                  tone: Tone.success,
+                ),
+              ],
             ),
-          )
-        ],
+            const SectionHeader('All organizations'),
+            if (_loading)
+              const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))
+            else if (_failed)
+              Card(child: EmptyState(icon: Icons.cloud_off_outlined, title: 'Could not load organizations', action: OutlinedButton(onPressed: _load, child: const Text('Try again'))))
+            else if (_orgs.isEmpty)
+              const Card(child: EmptyState(icon: Icons.business_outlined, title: 'No organizations yet'))
+            else
+              Card(
+                child: Column(
+                  children: [
+                    for (var i = 0; i < _orgs.length; i++) ...[
+                      if (i > 0) const Divider(indent: 72),
+                      Builder(builder: (context) {
+                        final o = _orgs[i];
+                        final plan = o['subscription_plan'] ?? 'freemium';
+                        final created = DateTime.tryParse(o['created_at']?.toString() ?? '');
+                        final members = _memberCount(o);
+                        return ListTile(
+                          contentPadding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+                          leading: CircleAvatar(
+                            backgroundColor: cs.secondaryContainer,
+                            child: Icon(Icons.business_outlined, color: cs.onSecondaryContainer),
+                          ),
+                          title: Text(o['name'] ?? '', style: t.titleSmall),
+                          subtitle: Text(
+                            '$members ${members == 1 ? 'member' : 'members'}${created != null ? '  ·  Joined ${DateFormat('d MMM yyyy').format(created.toLocal())}' : ''}',
+                            style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              StatusChip(_plans[plan] ?? plan, tone: plan == 'enterprise' ? Tone.primary : (plan == 'pro' ? Tone.success : Tone.neutral)),
+                              PopupMenuButton<String>(
+                                tooltip: 'More',
+                                onSelected: (v) => v == 'edit' ? _edit(o) : _delete(o),
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit'))),
+                                  PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete'))),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildBadge(String plan) {
-    final isEnterprise = plan.toLowerCase() == 'enterprise';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isEnterprise ? const Color(0xFF8B5CF6).withValues(alpha: 0.15) : const Color(0xFF10B981).withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isEnterprise ? const Color(0xFF8B5CF6).withValues(alpha: 0.3) : const Color(0xFF10B981).withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        plan.toUpperCase(),
-        style: TextStyle(
-          color: isEnterprise ? const Color(0xFF8B5CF6) : const Color(0xFF34D399),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
+  Future<void> _edit(Map<String, dynamic>? org) async {
+    final formKey = GlobalKey<FormState>();
+    final name = TextEditingController(text: org?['name']);
+    var plan = (org?['subscription_plan'] as String?) ?? 'freemium';
+    var saving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: Text(org == null ? 'Add organization' : 'Edit organization'),
+          content: SizedBox(
+            width: 420,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    controller: name,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Organization name'),
+                    validator: (v) => (v == null || v.trim().length < 2) ? 'Enter a name' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: plan,
+                    decoration: const InputDecoration(labelText: 'Plan'),
+                    items: [for (final e in _plans.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                    onChanged: (v) => setLocal(() => plan = v ?? plan),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: saving ? null : () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (!(formKey.currentState?.validate() ?? false)) return;
+                      setLocal(() => saving = true);
+                      try {
+                        final data = {'name': name.text.trim(), 'subscription_plan': plan};
+                        if (org == null) {
+                          await _db.from('organizations').insert(data);
+                        } else {
+                          await _db.from('organizations').update(data).eq('id', org['id']);
+                        }
+                        if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                        if (mounted) showMessage(this.context, org == null ? 'Organization added.' : 'Changes saved.');
+                        _load();
+                      } catch (_) {
+                        setLocal(() => saving = false);
+                        if (mounted) showMessage(this.context, 'Could not save the organization.');
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(org == null ? 'Add' : 'Save'),
+            ),
+          ],
         ),
       ),
     );
+    name.dispose();
+  }
+
+  Future<void> _delete(Map<String, dynamic> org) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Delete ${org['name']}?',
+      message: 'All of its users, shifts, punches and leave records will be permanently deleted. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    );
+    if (!ok) return;
+    try {
+      await _db.from('organizations').delete().eq('id', org['id']);
+      if (mounted) showMessage(context, 'Organization deleted.');
+      _load();
+    } catch (_) {
+      if (mounted) showMessage(context, 'Could not delete the organization.');
+    }
   }
 }

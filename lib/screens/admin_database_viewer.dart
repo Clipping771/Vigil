@@ -1,8 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/ui_kit.dart';
 
+const _tables = [
+  'organizations',
+  'organization_settings',
+  'employees',
+  'shifts',
+  'clock_events',
+  'breaks',
+  'exception_records',
+  'leave_requests',
+  'geofence_zones',
+  'audit_logs',
+];
 
+/// Read-only browser of the most recent rows in each table (system admins).
 class AdminDatabaseViewer extends ConsumerStatefulWidget {
   const AdminDatabaseViewer({super.key});
 
@@ -11,111 +25,88 @@ class AdminDatabaseViewer extends ConsumerStatefulWidget {
 }
 
 class _AdminDatabaseViewerState extends ConsumerState<AdminDatabaseViewer> {
-  final _supabase = Supabase.instance.client;
-  
-  final List<String> _tables = [
-    'organizations',
-    'employees',
-    'shifts',
-    'clock_events',
-    'exceptions',
-    'leave_requests'
-  ];
-  
-  String _selectedTable = 'organizations';
-  List<dynamic> _tableData = [];
-  bool _isLoading = true;
+  final _db = Supabase.instance.client;
+  String _table = _tables.first;
+  List<Map<String, dynamic>> _rows = [];
+  bool _loading = true;
+  bool _failed = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchTableData(_selectedTable);
+    _load(_table);
   }
 
-  Future<void> _fetchTableData(String table) async {
+  Future<void> _load(String table) async {
     setState(() {
-      _selectedTable = table;
-      _isLoading = true;
+      _table = table;
+      _loading = true;
+      _failed = false;
     });
-    
-
-    
     try {
-      final response = await _supabase.from(table).select().limit(100);
-      if (mounted) {
-        setState(() {
-          _tableData = response;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading $table: $e')));
-      }
+      final res = await _db.from(table).select().limit(100);
+      if (mounted) setState(() => _rows = List<Map<String, dynamic>>.from(res));
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Raw Database Viewer', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              DropdownButton<String>(
-                value: _selectedTable,
-                items: _tables.map((t) => DropdownMenuItem(value: t, child: Text(t.toUpperCase()))).toList(),
-                onChanged: (val) {
-                  if (val != null) _fetchTableData(val);
-                },
-              )
-            ],
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: _isLoading 
-              ? const Center(child: CircularProgressIndicator())
-              : _buildDataGrid(),
-          )
-        ],
-      ),
-    );
-  }
+    final t = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final pad = isCompact(context) ? 16.0 : 32.0;
 
-  Widget _buildDataGrid() {
-    if (_tableData.isEmpty) {
-      return const Center(child: Text('No data found in this table.'));
-    }
-
-    // Extract columns from the first row
-    final columns = _tableData.first.keys.toList();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SingleChildScrollView(
-          child: DataTable(
-            columns: columns.map<DataColumn>((c) => DataColumn(label: Text(c.toString(), style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
-            rows: _tableData.map<DataRow>((row) {
-              return DataRow(
-                cells: columns.map<DataCell>((col) => DataCell(Text(row[col]?.toString() ?? 'null'))).toList(),
-              );
-            }).toList(),
-          ),
+    return ListView(
+      padding: EdgeInsets.fromLTRB(pad, 16, pad, 32),
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final name in _tables)
+              ChoiceChip(
+                label: Text(name),
+                selected: _table == name,
+                onSelected: (_) => _load(name),
+              ),
+          ],
         ),
-      ),
+        const SizedBox(height: 8),
+        Text('Showing up to 100 rows · read-only', style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+        const SizedBox(height: 16),
+        if (_loading)
+          const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))
+        else if (_failed)
+          Card(child: EmptyState(icon: Icons.cloud_off_outlined, title: 'Could not load $_table', action: OutlinedButton(onPressed: () => _load(_table), child: const Text('Try again'))))
+        else if (_rows.isEmpty)
+          const Card(child: EmptyState(icon: Icons.table_rows_outlined, title: 'This table is empty'))
+        else
+          Card(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingTextStyle: t.labelLarge,
+                dataTextStyle: t.bodySmall,
+                columns: [for (final c in _rows.first.keys) DataColumn(label: Text(c))],
+                rows: [
+                  for (final row in _rows)
+                    DataRow(cells: [
+                      for (final c in _rows.first.keys)
+                        DataCell(
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 260),
+                            child: Text(row[c]?.toString() ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                    ]),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
