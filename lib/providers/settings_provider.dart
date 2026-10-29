@@ -314,6 +314,16 @@ final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((r
 });
 
 /// Explains the usual reasons a browser cannot reach a local Ollama server.
-String ollamaUnreachableMessage(String url) =>
-    'Could not reach Ollama at $url. Make sure Ollama is running'
-    '${kIsWeb ? ' and allows this site: set OLLAMA_ORIGINS=${Uri.base.origin} (or *) and restart Ollama' : ''}.';
+String ollamaUnreachableMessage(String url) {
+  final local = RegExp(r'^https?://(localhost|127\.0\.0\.1|\[::1\])').hasMatch(url);
+  if (kIsWeb && Uri.base.scheme == 'https' && local) {
+    // Chrome/Brave "Local Network Access": a public HTTPS site may only reach
+    // localhost after the user allows it, and Ollama does not opt in itself.
+    return 'Your browser blocked this website from reaching Ollama on your computer. '
+        'Click the icon left of the address bar → Site settings → allow "Local network access" '
+        '(Brave: also turn Shields off for this site), then reload. '
+        'Also make sure Ollama is running and OLLAMA_ORIGINS is set to * (or ${Uri.base.origin}).';
+  }
+  return 'Could not reach Ollama at $url. Make sure Ollama is running'
+      '${kIsWeb ? ' and allows this site: set OLLAMA_ORIGINS=${Uri.base.origin} (or *) and restart Ollama' : ''}.';
+}
