@@ -38,7 +38,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading users: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -304,7 +304,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                     } catch (e) {
                       setDialogState(() => isSaving = false);
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
                       }
                     }
                   },
@@ -323,12 +323,28 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
   }
 
   Future<void> _deleteUser(String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete user?'),
+        content: const Text('Their shifts, punches and leave history will also be deleted. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     try {
       await _supabase.from('employees').delete().eq('id', id);
       _fetchData();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User deleted')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
     }
   }
 
@@ -337,12 +353,15 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return Padding(
-      padding: const EdgeInsets.all(40.0),
+      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 700 ? 16 : 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 12,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,7 +376,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF3B82F6),
-                      foregroundColor: context.fg(),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -378,7 +397,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
               )
             ],
           ).animate().fadeIn().slideY(begin: -0.2, end: 0),
-          const SizedBox(height: 40),
+          const SizedBox(height: 24),
           Expanded(
             child: _users.isEmpty 
               ? Center(
@@ -405,7 +424,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                             ),
                           ],
                         ),
-                        child: Icon(Icons.people_outline, size: 48, color: const Color(0xFF60A5FA).withValues(alpha: 0.8)),
+                        child: Icon(Icons.people_outline, size: 48, color: const Color(0xFF3B82F6).withValues(alpha: 0.8)),
                       ),
                       const SizedBox(height: 24),
                       Text(
@@ -436,11 +455,11 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(colors: [const Color(0xFF00E5FF).withValues(alpha: 0.2), const Color(0xFF7C3AED).withValues(alpha: 0.2)]),
+                            gradient: LinearGradient(colors: [const Color(0xFF06B6D4).withValues(alpha: 0.2), const Color(0xFF7C3AED).withValues(alpha: 0.2)]),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+                            border: Border.all(color: const Color(0xFF06B6D4).withValues(alpha: 0.3)),
                           ),
-                          child: const Icon(Icons.person, color: Color(0xFF00E5FF)),
+                          child: const Icon(Icons.person, color: Color(0xFF06B6D4)),
                         ),
                         const SizedBox(width: 20),
                         Expanded(
@@ -479,7 +498,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     bool isAdmin = role == 'system_admin';
     bool isManager = role == 'manager';
     
-    Color textColor = isAdmin ? const Color(0xFFF87171) : (isManager ? const Color(0xFFFBBF24) : const Color(0xFF60A5FA));
+    Color textColor = isAdmin ? const Color(0xFFF87171) : (isManager ? const Color(0xFFFBBF24) : const Color(0xFF3B82F6));
     Color bgColor = isAdmin ? const Color(0xFFEF4444).withValues(alpha: 0.15) : (isManager ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : const Color(0xFF3B82F6).withValues(alpha: 0.15));
     Color borderColor = isAdmin ? const Color(0xFFEF4444).withValues(alpha: 0.3) : (isManager ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : const Color(0xFF3B82F6).withValues(alpha: 0.3));
 

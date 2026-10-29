@@ -9,6 +9,7 @@ import '../providers/staff_provider.dart';
 import '../providers/roster_provider.dart';
 import '../widgets/premium_card.dart';
 import '../models/leave_request.dart';
+import '../models/employee.dart';
 import '../widgets/app_shell.dart';
 import '../theme/ui.dart';
 import '../models/shift.dart';
@@ -54,7 +55,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to update status: $e'),
+          content: const Text('Could not update this request. You may not have permission.'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ));
@@ -113,9 +114,9 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
       return;
     }
 
-    final staffListAsync = ref.read(staffProvider);
-    final staffList = staffListAsync.value ?? [];
-    final isManager = currentUser.role != 'staff';
+    final isManager = currentUser.isManager;
+    final staffList = isManager ? await ref.read(staffProvider.future).catchError((_) => <Employee>[]) : <Employee>[];
+    if (!mounted) return;
 
     String selectedEmployeeId = currentUser.id;
     String selectedType = 'annual';
@@ -147,10 +148,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.beach_access, color: Color(0xFF38BDF8), size: 24),
+                    child: const Icon(Icons.beach_access, color: Color(0xFF0EA5E9), size: 24),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -182,7 +183,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: context.fg().withValues(alpha: 0.05),
-                            prefixIcon: const Icon(Icons.person_outline, color: Color(0xFF38BDF8)),
+                            prefixIcon: const Icon(Icons.person_outline, color: Color(0xFF0EA5E9)),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
                           ),
@@ -239,12 +240,12 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                              color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               '$totalDays ${totalDays == 1 ? 'Day' : 'Days'} Total',
-                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
+                              style: const TextStyle(color: Color(0xFF0EA5E9), fontWeight: FontWeight.bold, fontSize: 11),
                             ),
                           ),
                         ],
@@ -257,19 +258,6 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                             firstDate: DateTime.now().subtract(const Duration(days: 30)),
                             lastDate: DateTime.now().add(const Duration(days: 365)),
                             initialDateRange: dateRange,
-                            builder: (context, child) {
-                              return Theme(
-                                data: Theme.of(context).copyWith(
-                                  colorScheme: ColorScheme.dark(
-                                    primary: Color(0xFF38BDF8),
-                                    onPrimary: Colors.black,
-                                    surface: context.surfaceHigh,
-                                    onSurface: context.fg(),
-                                  ),
-                                ),
-                                child: child!,
-                              );
-                            },
                           );
                           if (picked != null) {
                             setDialogState(() => dateRange = picked);
@@ -285,7 +273,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.date_range, color: Color(0xFF38BDF8), size: 20),
+                              const Icon(Icons.date_range, color: Color(0xFF0EA5E9), size: 20),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
@@ -328,7 +316,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                 ),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF38BDF8),
+                    backgroundColor: const Color(0xFF0EA5E9),
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -372,7 +360,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                             setDialogState(() => isSubmitting = false);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Error: $e'),
+                                content: Text(e.toString().replaceFirst('Exception: ', '')),
                                 backgroundColor: Colors.red,
                                 behavior: SnackBarBehavior.floating,
                               ));
@@ -429,7 +417,8 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
     final leaveState = ref.watch(leaveStateProvider);
     final theme = Theme.of(context);
     final currentUser = ref.watch(authProvider).currentUser;
-    final isManager = currentUser?.role != 'staff';
+    final isManager = currentUser?.isManager ?? false;
+    final compact = MediaQuery.sizeOf(context).width < 700;
     final shiftsAsync = ref.watch(rosterProvider);
     final shifts = shiftsAsync.value ?? [];
 
@@ -467,7 +456,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
     }).toList();
 
     // Leave balances for current user (Fair Work Australia benchmarks)
-    final myApprovedRequests = allRequests.where((r) => r.employeeId == currentUser?.id && r.isApproved).toList();
+    final thisYear = DateTime.now().year;
+    final myApprovedRequests = allRequests
+        .where((r) => r.employeeId == currentUser?.id && r.isApproved && r.startDate.year == thisYear)
+        .toList();
     final myUsedAnnualDays = myApprovedRequests
         .where((r) => r.leaveType.toLowerCase() == 'annual')
         .fold<int>(0, (sum, r) => sum + r.durationDays);
@@ -478,99 +470,69 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.beach_access, color: Color(0xFF38BDF8), size: 20),
-            ),
-            const SizedBox(width: 12),
-            Text('Leave & Holiday Management', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: context.fg(), fontSize: 20)),
-          ],
-        ),
         leading: ShellMenuButton.maybe(context),
+        title: const Text('Leave'),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh, color: context.fg(0.7)),
-            tooltip: 'Refresh Data',
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
             onPressed: () => ref.read(leaveStateProvider.notifier).loadLeaveRequests(),
           ),
-          const SizedBox(width: 8),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF38BDF8),
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('New Leave Request', style: TextStyle(fontWeight: FontWeight.bold)),
-            onPressed: _showNewLeaveRequestDialog,
-          ),
-          const SizedBox(width: 24),
+          const SizedBox(width: 4),
+          compact
+              ? IconButton.filled(
+                  tooltip: 'New leave request',
+                  icon: const Icon(Icons.add),
+                  onPressed: _showNewLeaveRequestDialog,
+                )
+              : FilledButton.icon(
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('New request'),
+                  onPressed: _showNewLeaveRequestDialog,
+                ),
+          const SizedBox(width: 16),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // KPI Summary Row
-            _buildKpiRow(allRequests, myUsedAnnualDays, myUsedSickDays, isManager),
-            const SizedBox(height: 24),
-
-            // Controls & Filters Row
-            _buildFilterBar(allRequests, isManager),
-            const SizedBox(height: 20),
-
-            // Request Cards List
-            Expanded(
-              child: leaveState.isLoading && allRequests.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : leaveState.error != null && allRequests.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
-                              const SizedBox(height: 12),
-                              Text('Failed to load leave requests', style: GoogleFonts.outfit(fontSize: 18, color: context.fg())),
-                              const SizedBox(height: 8),
-                              Text(leaveState.error!, style: TextStyle(color: context.fg(0.54), fontSize: 13)),
-                              const SizedBox(height: 16),
-                              FilledButton(
-                                onPressed: () => ref.read(leaveStateProvider.notifier).loadLeaveRequests(),
-                                child: const Text('Try Again'),
-                              ),
-                            ],
-                          ),
-                        )
-                      : filtered.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.builder(
-                              itemCount: filtered.length,
-                              itemBuilder: (context, index) {
-                                final req = filtered[index];
-                                final isOwn = currentUser?.id == req.employeeId;
-
-                                // Check shift conflicts
-                                final conflicts = shifts.where((s) {
-                                  if (s.employeeId != req.employeeId) return false;
-                                  final sStart = DateTime(req.startDate.year, req.startDate.month, req.startDate.day);
-                                  final sEnd = DateTime(req.endDate.year, req.endDate.month, req.endDate.day, 23, 59, 59);
-                                  return s.startTime.isBefore(sEnd) && s.endTime.isAfter(sStart);
-                                }).toList();
-
-                                return _buildLeaveCard(req, index, isManager, isOwn, conflicts);
-                              },
-                            ),
-            ),
-          ],
-        ),
+      body: ListView(
+        padding: EdgeInsets.all(compact ? 16 : 28),
+        children: [
+          _buildKpiRow(allRequests, myUsedAnnualDays, myUsedSickDays, isManager),
+          const SizedBox(height: 24),
+          _buildFilterBar(allRequests, isManager),
+          const SizedBox(height: 20),
+          if (leaveState.isLoading && allRequests.isEmpty)
+            const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))
+          else if (leaveState.error != null && allRequests.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
+                  const SizedBox(height: 12),
+                  Text('Could not load leave requests', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => ref.read(leaveStateProvider.notifier).loadLeaveRequests(),
+                    child: const Text('Try again'),
+                  ),
+                ],
+              ),
+            )
+          else if (filtered.isEmpty)
+            Padding(padding: const EdgeInsets.symmetric(vertical: 48), child: _buildEmptyState())
+          else
+            for (var index = 0; index < filtered.length; index++)
+              Builder(builder: (context) {
+                final req = filtered[index];
+                final isOwn = currentUser?.id == req.employeeId;
+                final leaveStart = DateTime(req.startDate.year, req.startDate.month, req.startDate.day);
+                final leaveEnd = DateTime(req.endDate.year, req.endDate.month, req.endDate.day).add(const Duration(days: 1));
+                final conflicts = shifts
+                    .where((s) => s.employeeId == req.employeeId && s.startTime.isBefore(leaveEnd) && s.endTime.isAfter(leaveStart))
+                    .toList();
+                return _buildLeaveCard(req, index, isManager, isOwn, conflicts);
+              }),
+        ],
       ),
     );
   }
@@ -607,7 +569,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                 value: '$onLeaveTodayCount',
                 subtitle: 'Active roster absentees',
                 icon: Icons.beach_access,
-                accentColor: const Color(0xFF38BDF8),
+                accentColor: const Color(0xFF0EA5E9),
               ),
             ),
             SizedBox(
@@ -684,10 +646,13 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
 
     return Column(
       children: [
-        Row(
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             // Tabs
-            Expanded(
+            SizedBox(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -703,11 +668,9 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
-
             // Search Box
             SizedBox(
-              width: 260,
+              width: MediaQuery.sizeOf(context).width < 700 ? double.infinity : 260,
               height: 40,
               child: TextField(
                 controller: _searchController,
@@ -736,17 +699,16 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
             ),
 
             if (isManager) ...[
-              const SizedBox(width: 12),
               // Filter My Leaves Only Toggle
               FilterChip(
                 label: const Text('My Requests Only', style: TextStyle(fontSize: 12)),
                 selected: _onlyMyRequests,
                 onSelected: (val) => setState(() => _onlyMyRequests = val),
                 backgroundColor: context.fg().withValues(alpha: 0.04),
-                selectedColor: const Color(0xFF38BDF8).withValues(alpha: 0.2),
-                checkmarkColor: const Color(0xFF38BDF8),
-                side: BorderSide(color: _onlyMyRequests ? const Color(0xFF38BDF8) : context.fg().withValues(alpha: 0.1)),
-                labelStyle: TextStyle(color: _onlyMyRequests ? const Color(0xFF38BDF8) : context.fg(0.7)),
+                selectedColor: const Color(0xFF0EA5E9).withValues(alpha: 0.2),
+                checkmarkColor: const Color(0xFF0EA5E9),
+                side: BorderSide(color: _onlyMyRequests ? const Color(0xFF0EA5E9) : context.fg().withValues(alpha: 0.1)),
+                labelStyle: TextStyle(color: _onlyMyRequests ? const Color(0xFF0EA5E9) : context.fg(0.7)),
               ),
             ],
           ],
@@ -764,17 +726,17 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF38BDF8).withValues(alpha: 0.15) : context.fg().withValues(alpha: 0.04),
+          color: isSelected ? const Color(0xFF0EA5E9).withValues(alpha: 0.15) : context.fg().withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? const Color(0xFF38BDF8) : context.fg().withValues(alpha: 0.08),
+            color: isSelected ? const Color(0xFF0EA5E9) : context.fg().withValues(alpha: 0.08),
             width: isSelected ? 1.5 : 1,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? const Color(0xFF38BDF8) : context.fg(0.7),
+            color: isSelected ? const Color(0xFF0EA5E9) : context.fg(0.7),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             fontSize: 13,
           ),
@@ -818,7 +780,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
+                Expanded(child: Row(
                   children: [
                     CircleAvatar(
                       radius: 22,
@@ -829,10 +791,13 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    Column(
+                    Expanded(child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(displayName, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.fg())),
                             if (isOwnRequest) ...[
@@ -840,11 +805,11 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF38BDF8).withValues(alpha: 0.2),
+                                  color: const Color(0xFF0EA5E9).withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.4)),
+                                  border: Border.all(color: const Color(0xFF0EA5E9).withValues(alpha: 0.4)),
                                 ),
-                                child: const Text('YOU', style: TextStyle(fontSize: 10, color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
+                                child: const Text('YOU', style: TextStyle(fontSize: 10, color: Color(0xFF0EA5E9), fontWeight: FontWeight.bold)),
                               ),
                             ],
                             if (req.employeeRole != null) ...[
@@ -861,7 +826,8 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Row(
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             if (req.employeeEmail != null) ...[
                               Text(req.employeeEmail!, style: TextStyle(color: context.fg(0.38), fontSize: 12)),
@@ -875,12 +841,13 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                           ],
                         ),
                       ],
-                    ),
+                    )),
                   ],
-                ),
+                )),
 
                 // Status Badge & Cancel Action
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -922,7 +889,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
             const SizedBox(height: 16),
 
             // Middle Row: Leave Type, Date Range, Duration
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -964,10 +934,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text('ON LEAVE TODAY', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: const Text('ON LEAVE TODAY', style: TextStyle(color: Color(0xFF0EA5E9), fontSize: 10, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ],
@@ -990,7 +960,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                     Expanded(
                       child: Text(
                         'Roster Conflict: ${conflicts.length} scheduled shift(s) overlap with this leave period. Approving will require reassignment.',
-                        style: const TextStyle(color: Color(0xFFFCD34D), fontSize: 12),
+                        style: const TextStyle(color: Color(0xFFD97706), fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -1026,10 +996,12 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
             ],
 
             // Manager Action Buttons
-            if (req.isPending && isManager) ...[
+            if (req.isPending && isManager && (!isOwnRequest || (ref.read(authProvider).currentUser?.isOrgAdmin ?? false))) ...[
               const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -1042,11 +1014,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                     onPressed: () => _updateStatus(req.id, 'declined'),
                     label: const Text('Decline Request'),
                   ),
-                  const SizedBox(width: 12),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: context.fg(),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -1088,7 +1059,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
           const SizedBox(height: 20),
           FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF38BDF8),
+              backgroundColor: const Color(0xFF0EA5E9),
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),

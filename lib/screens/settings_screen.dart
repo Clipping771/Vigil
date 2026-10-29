@@ -132,18 +132,12 @@ class _AppearanceSection extends ConsumerWidget {
       subtitle: 'Saved on this device.',
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            for (final t in AppTheme.values)
-              ChoiceChip(
-                label: Text(t.label),
-                avatar: CircleAvatar(backgroundColor: buildAppTheme(t).colorScheme.primary, radius: 7),
-                selected: t == current,
-                onSelected: (_) => ref.read(themeProvider.notifier).setTheme(t),
-              ),
+        child: SegmentedButton<AppTheme>(
+          segments: [
+            for (final t in AppTheme.values) ButtonSegment(value: t, icon: Icon(t.icon), label: Text(t.label)),
           ],
+          selected: {current},
+          onSelectionChanged: (s) => ref.read(themeProvider.notifier).setTheme(s.first),
         ),
       ),
     );

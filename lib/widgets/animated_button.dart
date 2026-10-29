@@ -73,13 +73,13 @@ class _AnimatedButtonState extends State<AnimatedButton> with SingleTickerProvid
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: const LinearGradient(
-              colors: [Color(0xFF00E5FF), Color(0xFF7C3AED)],
+              colors: [Color(0xFF06B6D4), Color(0xFF7C3AED)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF00E5FF).withValues(alpha: 0.3),
+                color: const Color(0xFF06B6D4).withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),

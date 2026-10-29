@@ -22,7 +22,7 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
     setState(() {
       _isExpanded = !_isExpanded;
       if (_isExpanded && _messages.isEmpty) {
-        _messages.add({'sender': 'agent', 'text': 'Hello! I am Vigil AI. How can I help you? (e.g. "turn on light mode")'});
+        _messages.add({'sender': 'agent', 'text': 'Hi, I am Vigil AI. Try "switch to light mode", "who is on the roster?" or "open leave". Add your API key in Settings first.'});
       }
     });
   }
@@ -38,6 +38,7 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
     _controller.clear();
 
     final response = await ref.read(agentServiceProvider).executeCommand(text, context);
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
@@ -51,13 +52,15 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
       return FloatingActionButton(
         onPressed: _toggleExpanded,
         backgroundColor: const Color(0xFF7C3AED),
-        child: Icon(Icons.auto_awesome, color: context.fg()),
+        tooltip: 'Vigil AI assistant',
+        child: const Icon(Icons.auto_awesome, color: Colors.white),
       ).animate().scale(curve: Curves.easeOutBack, duration: 400.ms);
     }
 
+    final size = MediaQuery.sizeOf(context);
     return Container(
-      width: 350,
-      height: 450,
+      width: size.width < 400 ? size.width - 32 : 350,
+      height: size.height < 560 ? size.height - 120 : 450,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(24),

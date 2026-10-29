@@ -242,9 +242,8 @@ class _UserMenu extends ConsumerWidget {
           if (context.mounted) context.go('/login');
         } else if (value == 'settings') {
           context.go('/settings');
-        } else {
-          final t = AppTheme.values.byName(value);
-          ref.read(themeProvider.notifier).setTheme(t);
+        } else if (value == 'theme') {
+          ref.read(themeProvider.notifier).toggle();
         }
       },
       itemBuilder: (context) => [
@@ -253,8 +252,14 @@ class _UserMenu extends ConsumerWidget {
           child: Text(user.email, style: theme.textTheme.bodySmall),
         ),
         const PopupMenuDivider(),
-        for (final t in AppTheme.values)
-          CheckedPopupMenuItem(value: t.name, checked: t == currentTheme, child: Text('${t.label} theme')),
+        PopupMenuItem(
+          value: 'theme',
+          child: ListTile(
+            dense: true,
+            leading: Icon(currentTheme == AppTheme.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+            title: Text(currentTheme == AppTheme.dark ? 'Switch to light mode' : 'Switch to dark mode'),
+          ),
+        ),
         const PopupMenuDivider(),
         const PopupMenuItem(value: 'settings', child: ListTile(dense: true, leading: Icon(Icons.person_outline), title: Text('Profile & settings'))),
         PopupMenuItem(

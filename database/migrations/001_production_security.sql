@@ -162,8 +162,11 @@ CREATE POLICY leave_select ON public.leave_requests FOR SELECT TO authenticated
 CREATE POLICY leave_insert ON public.leave_requests FOR INSERT TO authenticated
   WITH CHECK (organization_id = public.get_user_org_id()
               AND (employee_id = public.current_employee_id() OR public.is_manager_or_admin()));
+-- Managers/HR cannot approve their own leave; owners and admins may.
 CREATE POLICY leave_update ON public.leave_requests FOR UPDATE TO authenticated
-  USING ((organization_id = public.get_user_org_id() AND public.is_manager_or_admin()) OR public.is_system_admin());
+  USING ((organization_id = public.get_user_org_id() AND public.is_manager_or_admin()
+          AND (employee_id IS DISTINCT FROM public.current_employee_id() OR public.is_org_admin()))
+         OR public.is_system_admin());
 CREATE POLICY leave_delete ON public.leave_requests FOR DELETE TO authenticated
   USING ((employee_id = public.current_employee_id() AND status = 'pending')
          OR (organization_id = public.get_user_org_id() AND public.is_manager_or_admin())

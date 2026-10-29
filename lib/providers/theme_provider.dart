@@ -3,22 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppTheme {
-  deepSpace,
-  cyberpunk,
-  arcticLight,
-  forestGlow,
-  crimsonVoid,
-}
+/// The app offers exactly two appearances.
+enum AppTheme { light, dark }
 
 extension AppThemeLabel on AppTheme {
-  String get label => switch (this) {
-        AppTheme.deepSpace => 'Midnight',
-        AppTheme.cyberpunk => 'Graphite',
-        AppTheme.arcticLight => 'Light',
-        AppTheme.forestGlow => 'Forest',
-        AppTheme.crimsonVoid => 'Crimson',
-      };
+  String get label => this == AppTheme.light ? 'Light' : 'Dark';
+  IconData get icon => this == AppTheme.light ? Icons.light_mode_outlined : Icons.dark_mode_outlined;
 }
 
 class ThemeState {
@@ -26,6 +16,8 @@ class ThemeState {
   final ThemeData themeData;
 
   ThemeState({required this.currentTheme, required this.themeData});
+
+  bool get isDark => currentTheme == AppTheme.dark;
 }
 
 final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeState>((ref) {
@@ -35,27 +27,31 @@ final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeState>((ref) {
 class ThemeNotifier extends StateNotifier<ThemeState> {
   static const _prefsKey = 'app_theme';
 
-  ThemeNotifier() : super(ThemeState(currentTheme: AppTheme.deepSpace, themeData: buildAppTheme(AppTheme.deepSpace))) {
+  ThemeNotifier() : super(_stateFor(_systemDefault())) {
     _restore();
   }
+
+  static AppTheme _systemDefault() =>
+      WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.light ? AppTheme.light : AppTheme.dark;
+
+  static ThemeState _stateFor(AppTheme t) => ThemeState(currentTheme: t, themeData: buildAppTheme(t));
 
   Future<void> _restore() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getString(_prefsKey);
-      final theme = AppTheme.values.where((t) => t.name == saved).firstOrNull;
-      if (theme != null && mounted) {
-        state = ThemeState(currentTheme: theme, themeData: buildAppTheme(theme));
-      }
+      final saved = AppTheme.values.where((t) => t.name == prefs.getString(_prefsKey)).firstOrNull;
+      if (saved != null && mounted) state = _stateFor(saved);
     } catch (_) {
-      // Preferences unavailable (e.g. private browsing) — keep the default.
+      // Preferences unavailable (e.g. private browsing) — keep the system default.
     }
   }
 
   void setTheme(AppTheme theme) {
-    state = ThemeState(currentTheme: theme, themeData: buildAppTheme(theme));
+    state = _stateFor(theme);
     SharedPreferences.getInstance().then((p) => p.setString(_prefsKey, theme.name)).ignore();
   }
+
+  void toggle() => setTheme(state.isDark ? AppTheme.light : AppTheme.dark);
 }
 
 // ==========================================
@@ -91,33 +87,7 @@ class _Palette {
 }
 
 const _palettes = {
-  AppTheme.deepSpace: _Palette(
-    brightness: Brightness.dark,
-    background: Color(0xFF0B1120),
-    surface: Color(0xFF111A2E),
-    surfaceHigh: Color(0xFF1A2540),
-    border: Color(0xFF243150),
-    primary: Color(0xFF4F8CFF),
-    secondary: Color(0xFF22D3EE),
-    tertiary: Color(0xFF8B5CF6),
-    error: Color(0xFFF87171),
-    text: Color(0xFFE6EBF5),
-    textMuted: Color(0xFF8A96AE),
-  ),
-  AppTheme.cyberpunk: _Palette(
-    brightness: Brightness.dark,
-    background: Color(0xFF0A0A0B),
-    surface: Color(0xFF141416),
-    surfaceHigh: Color(0xFF1E1E22),
-    border: Color(0xFF2A2A30),
-    primary: Color(0xFFF5F5F7),
-    secondary: Color(0xFF38BDF8),
-    tertiary: Color(0xFFFACC15),
-    error: Color(0xFFF87171),
-    text: Color(0xFFEDEDEF),
-    textMuted: Color(0xFF8E8E96),
-  ),
-  AppTheme.arcticLight: _Palette(
+  AppTheme.light: _Palette(
     brightness: Brightness.light,
     background: Color(0xFFF6F8FB),
     surface: Color(0xFFFFFFFF),
@@ -130,31 +100,18 @@ const _palettes = {
     text: Color(0xFF0F172A),
     textMuted: Color(0xFF64748B),
   ),
-  AppTheme.forestGlow: _Palette(
+  AppTheme.dark: _Palette(
     brightness: Brightness.dark,
-    background: Color(0xFF07130E),
-    surface: Color(0xFF0D1F17),
-    surfaceHigh: Color(0xFF142B21),
-    border: Color(0xFF1F3B2E),
-    primary: Color(0xFF34D399),
-    secondary: Color(0xFF5EEAD4),
-    tertiary: Color(0xFFFBBF24),
+    background: Color(0xFF0B1120),
+    surface: Color(0xFF111A2E),
+    surfaceHigh: Color(0xFF1A2540),
+    border: Color(0xFF243150),
+    primary: Color(0xFF4F8CFF),
+    secondary: Color(0xFF22D3EE),
+    tertiary: Color(0xFF8B5CF6),
     error: Color(0xFFF87171),
-    text: Color(0xFFE3F5EC),
-    textMuted: Color(0xFF86A898),
-  ),
-  AppTheme.crimsonVoid: _Palette(
-    brightness: Brightness.dark,
-    background: Color(0xFF120A0B),
-    surface: Color(0xFF1C1012),
-    surfaceHigh: Color(0xFF28171A),
-    border: Color(0xFF3A2226),
-    primary: Color(0xFFF43F5E),
-    secondary: Color(0xFFFB923C),
-    tertiary: Color(0xFFA78BFA),
-    error: Color(0xFFFCA5A5),
-    text: Color(0xFFF7E8EA),
-    textMuted: Color(0xFFAA8E93),
+    text: Color(0xFFE6EBF5),
+    textMuted: Color(0xFF8A96AE),
   ),
 };
 

@@ -22,6 +22,9 @@ class StaffLiveAttendance {
   final DateTime? breakStartTime;
   final Duration completedWorkedDuration;
   final Duration totalBreakDuration;
+
+  /// Completed break time inside the currently open clock-in segment.
+  final Duration currentSegmentBreak;
   final double? latitude;
   final double? longitude;
   final bool isGeofenced;
@@ -38,6 +41,7 @@ class StaffLiveAttendance {
     this.breakStartTime,
     this.completedWorkedDuration = Duration.zero,
     this.totalBreakDuration = Duration.zero,
+    this.currentSegmentBreak = Duration.zero,
     this.latitude,
     this.longitude,
     this.isGeofenced = false,
@@ -48,11 +52,11 @@ class StaffLiveAttendance {
   Duration get currentDuration {
     final now = DateTime.now();
     if (status == StaffWorkStatus.clockedIn && shiftStartTime != null) {
-      final ongoing = now.difference(shiftStartTime!.toLocal());
+      final ongoing = now.difference(shiftStartTime!.toLocal()) - currentSegmentBreak;
       final total = completedWorkedDuration + ongoing;
       return total.isNegative ? Duration.zero : total;
     } else if (status == StaffWorkStatus.onBreak && shiftStartTime != null && breakStartTime != null) {
-      final ongoingBeforeBreak = breakStartTime!.toLocal().difference(shiftStartTime!.toLocal());
+      final ongoingBeforeBreak = breakStartTime!.toLocal().difference(shiftStartTime!.toLocal()) - currentSegmentBreak;
       final total = completedWorkedDuration + ongoingBeforeBreak;
       return total.isNegative ? Duration.zero : total;
     }
@@ -97,40 +101,40 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
   final Ref _ref;
   final _supabase = Supabase.instance.client;
   RealtimeChannel? _workforceChannel;
+  Timer? _debounce;
 
   WorkforceNotifier(this._ref) : super(WorkforceState(isLoading: true)) {
     loadWorkforce();
     _setupRealtime();
   }
 
+  /// Coalesces bursts of realtime events into a single reload.
+  void _scheduleReload() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) loadWorkforce();
+    });
+  }
+
   void _setupRealtime() {
-    // Listen to changes on clock_events, breaks, and employees
-    _workforceChannel = _supabase.channel('public_live_workforce_feed')
-      ..onPostgresChanges(
+    final user = _ref.read(authProvider).currentUser;
+    if (user == null) return;
+    final orgFilter = PostgresChangeFilter(
+      type: PostgresChangeFilterType.eq,
+      column: 'organization_id',
+      value: user.organizationId,
+    );
+    final channel = _supabase.channel('live_workforce_${user.organizationId}');
+    for (final table in const ['clock_events', 'breaks', 'employees']) {
+      channel.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
-        table: 'clock_events',
-        callback: (payload) {
-          loadWorkforce();
-        },
-      )
-      ..onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'breaks',
-        callback: (payload) {
-          loadWorkforce();
-        },
-      )
-      ..onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'employees',
-        callback: (payload) {
-          loadWorkforce();
-        },
-      )
-      ..subscribe();
+        table: table,
+        filter: orgFilter,
+        callback: (_) => _scheduleReload(),
+      );
+    }
+    _workforceChannel = channel..subscribe();
   }
 
   Future<void> loadWorkforce() async {
@@ -146,11 +150,11 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
       final todayStartUtc = todayStartLocal.toUtc().toIso8601String();
 
       // 1. Fetch all employees in current organization (or all if system_admin)
-      var query = _supabase.from('employees').select();
-      if (user.role != 'system_admin') {
-        query = query.eq('organization_id', user.organizationId);
-      }
-      final employeesRes = await query.order('full_name', ascending: true);
+      final employeesRes = await _supabase
+          .from('employees')
+          .select()
+          .eq('organization_id', user.organizationId)
+          .order('full_name', ascending: true);
 
       final employees = List<Map<String, dynamic>>.from(employeesRes);
       final Map<String, String> namesMap = {};
@@ -159,27 +163,21 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
       }
 
       // 2. Fetch all today's clock_events for organization
-      var eventsFilter = _supabase
+      final eventsRes = await _supabase
           .from('clock_events')
           .select()
-          .gte('event_time', todayStartUtc);
-
-      if (user.role != 'system_admin') {
-        eventsFilter = eventsFilter.eq('organization_id', user.organizationId);
-      }
-      final eventsRes = await eventsFilter.order('event_time', ascending: true);
+          .eq('organization_id', user.organizationId)
+          .gte('event_time', todayStartUtc)
+          .order('event_time', ascending: true);
       final allEvents = (eventsRes as List).map((e) => ClockEvent.fromJson(e)).toList();
 
       // 3. Fetch all today's breaks for organization
-      var breaksFilter = _supabase
+      final breaksRes = await _supabase
           .from('breaks')
           .select()
-          .gte('start_time', todayStartUtc);
-
-      if (user.role != 'system_admin') {
-        breaksFilter = breaksFilter.eq('organization_id', user.organizationId);
-      }
-      final breaksRes = await breaksFilter.order('start_time', ascending: true);
+          .eq('organization_id', user.organizationId)
+          .gte('start_time', todayStartUtc)
+          .order('start_time', ascending: true);
       final allBreaks = List<Map<String, dynamic>>.from(breaksRes);
 
       // 4. Calculate status for each employee
@@ -235,7 +233,17 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
           status = StaffWorkStatus.clockedOut;
         }
 
-        final netWorked = completedWorked - Duration(minutes: totalBreakMinutes);
+        int currentSegmentBreakMinutes = 0;
+        final openSegmentStart = segmentClockIn;
+        if (openSegmentStart != null) {
+          for (final b in empBreaks) {
+            final start = DateTime.tryParse(b['start_time'].toString());
+            if (b['end_time'] != null && start != null && !start.isBefore(openSegmentStart)) {
+              currentSegmentBreakMinutes += (b['duration_minutes'] as num?)?.toInt() ?? 0;
+            }
+          }
+        }
+        final netWorked = completedWorked - Duration(minutes: totalBreakMinutes - currentSegmentBreakMinutes);
 
         liveStaff.add(StaffLiveAttendance(
           employeeId: empId,
@@ -248,6 +256,7 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
           breakStartTime: activeBreak,
           completedWorkedDuration: netWorked.isNegative ? Duration.zero : netWorked,
           totalBreakDuration: Duration(minutes: totalBreakMinutes),
+          currentSegmentBreak: Duration(minutes: currentSegmentBreakMinutes),
           latitude: lastLat,
           longitude: lastLng,
           isGeofenced: isGeofenced,
@@ -281,6 +290,7 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _workforceChannel?.unsubscribe();
     super.dispose();
   }

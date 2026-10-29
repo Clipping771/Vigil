@@ -30,7 +30,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading organizations: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -107,7 +107,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                     } catch (e) {
                       setDialogState(() => isSaving = false);
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e'), backgroundColor: Colors.red));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
                       }
                     }
                   },
@@ -195,7 +195,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                     } catch (e) {
                       setDialogState(() => isSaving = false);
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
                       }
                     }
                   },
@@ -214,12 +214,28 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
   }
 
   Future<void> _deleteOrganization(String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete organization?'),
+        content: const Text('All of its employees and data will be permanently deleted. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     try {
       await _supabase.from('organizations').delete().eq('id', id);
       _fetchOrganizations();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Organization deleted')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
     }
   }
 
@@ -228,12 +244,15 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return Padding(
-      padding: const EdgeInsets.all(40.0),
+      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 700 ? 16 : 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 12,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,7 +265,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: context.fg(),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -256,7 +275,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
               )
             ],
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 24),
           Expanded(
             child: _organizations.isEmpty 
               ? Center(
@@ -283,7 +302,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                             ),
                           ],
                         ),
-                        child: Icon(Icons.business_outlined, size: 48, color: const Color(0xFF60A5FA).withValues(alpha: 0.8)),
+                        child: Icon(Icons.business_outlined, size: 48, color: const Color(0xFF3B82F6).withValues(alpha: 0.8)),
                       ),
                       const SizedBox(height: 24),
                       Text(
@@ -334,7 +353,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                             color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.business, color: Color(0xFF60A5FA)),
+                          child: const Icon(Icons.business, color: Color(0xFF3B82F6)),
                         ),
                         const SizedBox(width: 20),
                         Expanded(
@@ -381,7 +400,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
       child: Text(
         plan.toUpperCase(),
         style: TextStyle(
-          color: isEnterprise ? const Color(0xFFA78BFA) : const Color(0xFF34D399),
+          color: isEnterprise ? const Color(0xFF8B5CF6) : const Color(0xFF34D399),
           fontSize: 11,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.5,

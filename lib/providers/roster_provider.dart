@@ -9,14 +9,11 @@ final rosterProvider = FutureProvider<List<Shift>>((ref) async {
   if (currentUser == null) return [];
 
   final supabase = Supabase.instance.client;
-  var query = supabase.from('shifts').select();
+  var query = supabase.from('shifts').select().eq('organization_id', currentUser.organizationId);
 
-  if (currentUser.role == 'staff') {
+  if (!currentUser.isManager) {
     // Staff only see their own assigned roster shifts
     query = query.eq('employee_id', currentUser.id);
-  } else if (currentUser.role != 'system_admin') {
-    // Admin, Manager, and Owner see all shifts in their organization
-    query = query.eq('organization_id', currentUser.organizationId);
   }
 
   final response = await query.order('start_time', ascending: true);

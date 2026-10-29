@@ -61,21 +61,29 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
   }
 
   void _setupRealtime() {
-    try {
-      _subscription = _supabase.channel('public_exception_records_feed')
-        ..onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'exception_records',
-          callback: (_) {
-            fetchExceptions(silent: true);
-          },
-        )
-        ..subscribe();
-    } catch (_) {
-      // Realtime channel fail-safe
-    }
+    final user = _ref.read(authProvider).currentUser;
+    if (user == null) return;
+    _subscription = _supabase.channel('exception_records_${user.organizationId}')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'exception_records',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'organization_id',
+          value: user.organizationId,
+        ),
+        callback: (_) {
+          _debounce?.cancel();
+          _debounce = Timer(const Duration(milliseconds: 400), () {
+            if (mounted) fetchExceptions(silent: true);
+          });
+        },
+      )
+      ..subscribe();
   }
+
+  Timer? _debounce;
 
   Future<void> fetchExceptions({bool silent = false}) async {
     final user = _ref.read(authProvider).currentUser;
@@ -90,25 +98,26 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
 
     try {
       // 1. Fetch with joined employee details
-      var query = _supabase.from('exception_records').select('*, employees(full_name, email, role, site_location)');
-
-      if (user.role != 'system_admin') {
-        query = query.eq('organization_id', user.organizationId);
-      }
-
-      final response = await query.order('created_at', ascending: false);
+      final response = await _supabase
+          .from('exception_records')
+          .select('*, employees(full_name, email, role, site_location)')
+          .eq('organization_id', user.organizationId)
+          .order('created_at', ascending: false);
       final list = (response as List).map((json) => ExceptionRecord.fromJson(json)).toList();
       state = ExceptionState(allExceptions: list, isLoading: false);
     } catch (e) {
       // Fallback: If foreign join is not supported, query plain and map employee details
       try {
-        var plainQuery = _supabase.from('exception_records').select();
-        if (user.role != 'system_admin') {
-          plainQuery = plainQuery.eq('organization_id', user.organizationId);
-        }
-        final plainRes = await plainQuery.order('created_at', ascending: false);
+        final plainRes = await _supabase
+            .from('exception_records')
+            .select()
+            .eq('organization_id', user.organizationId)
+            .order('created_at', ascending: false);
 
-        final empRes = await _supabase.from('employees').select('id, full_name, email, role, site_location');
+        final empRes = await _supabase
+            .from('employees')
+            .select('id, full_name, email, role, site_location')
+            .eq('organization_id', user.organizationId);
         final Map<String, Map<String, dynamic>> empMap = {};
         for (var emp in (empRes as List)) {
           empMap[emp['id'].toString()] = emp;
@@ -299,6 +308,7 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _subscription?.unsubscribe();
     super.dispose();
   }

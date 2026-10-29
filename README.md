@@ -11,6 +11,7 @@ Workforce attendance, rostering and compliance platform — Flutter (web, mobile
 - Compliance exceptions: late starts, overtime, 10-hour rest breaches, geofence breaches, leave conflicts
 - CSV / PDF compliance exports
 - Multi-tenant with row-level security and role-based access (owner, admin, HR, manager, staff, system admin)
+- Light and dark mode (follows the device on first launch)
 - Optional AI assistant (bring your own Gemini / OpenAI / Claude key)
 
 ## Setup
@@ -60,5 +61,20 @@ Every endpoint requires the user's Supabase access token as `Authorization: Bear
 
 ```bash
 flutter analyze
-flutter test
+flutter test        # unit tests + layout tests (every page, phone & desktop, light & dark)
+```
+
+Database security tests (needs a local PostgreSQL; never run against production):
+
+```bash
+psql -d vigil_test -f database/tests/supabase_stub.sql
+psql -d vigil_test -f database/schema.sql
+psql -d vigil_test -f database/migrations/001_production_security.sql
+psql -d vigil_test -f database/tests/rls_tests.sql   # prints PASS/FAIL per scenario
+```
+
+Preview the signed-in app with sample data (no backend):
+
+```bash
+flutter run -d chrome -t test/preview/main_preview.dart
 ```

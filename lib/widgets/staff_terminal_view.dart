@@ -15,6 +15,9 @@ import 'premium_card.dart';
 import 'animated_button.dart';
 import '../theme/ui.dart';
 
+/// Amber that stays readable on both light and dark surfaces.
+const _amber = Color(0xFFF59E0B);
+
 class StaffTerminalView extends ConsumerStatefulWidget {
   const StaffTerminalView({super.key});
 
@@ -240,6 +243,27 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
     }
   }
 
+  Future<void> _runBreakAction({required bool start}) async {
+    setState(() => _isProcessingAction = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final clock = ref.read(clockServiceProvider);
+      if (start) {
+        await clock.startBreak();
+        messenger.showSnackBar(const SnackBar(content: Text('Break started. Enjoy!')));
+      } else {
+        await clock.endBreak();
+        messenger.showSnackBar(const SnackBar(content: Text('Welcome back — break ended.')));
+      }
+    } on ClockStateException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('Could not update your break. Check your connection.')));
+    } finally {
+      if (mounted) setState(() => _isProcessingAction = false);
+    }
+  }
+
   Future<void> _showNoRosterScheduledDialog() async {
     return showDialog(
       context: context,
@@ -251,9 +275,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
           decoration: BoxDecoration(
             color: context.surfaceHigh,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.5), width: 2),
+            border: Border.all(color: _amber.withValues(alpha: 0.5), width: 2),
             boxShadow: [
-              BoxShadow(color: Colors.amberAccent.withValues(alpha: 0.15), blurRadius: 40, spreadRadius: -5),
+              BoxShadow(color: _amber.withValues(alpha: 0.15), blurRadius: 40, spreadRadius: -5),
             ],
           ),
           child: Column(
@@ -262,10 +286,10 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.amberAccent.withValues(alpha: 0.1),
+                  color: _amber.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.event_busy, size: 48, color: Colors.amberAccent),
+                child: const Icon(Icons.event_busy, size: 48, color: _amber),
               ),
               const SizedBox(height: 20),
               Text(
@@ -318,9 +342,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
           decoration: BoxDecoration(
             color: context.surfaceHigh,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.5), width: 2),
+            border: Border.all(color: _amber.withValues(alpha: 0.5), width: 2),
             boxShadow: [
-              BoxShadow(color: Colors.amberAccent.withValues(alpha: 0.15), blurRadius: 40, spreadRadius: -5),
+              BoxShadow(color: _amber.withValues(alpha: 0.15), blurRadius: 40, spreadRadius: -5),
             ],
           ),
           child: Column(
@@ -329,10 +353,10 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.amberAccent.withValues(alpha: 0.1),
+                  color: _amber.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.location_off, size: 48, color: Colors.amberAccent),
+                child: const Icon(Icons.location_off, size: 48, color: _amber),
               ),
               const SizedBox(height: 20),
               Text(
@@ -356,7 +380,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, size: 18, color: Colors.amberAccent),
+                    Icon(Icons.info_outline, size: 18, color: _amber),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -387,7 +411,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                     child: FilledButton(
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.amber.shade700,
-                        foregroundColor: context.fg(),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -416,7 +440,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
           decoration: BoxDecoration(
             color: Colors.black,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFF00E5FF), width: 2),
+            border: Border.all(color: const Color(0xFF06B6D4), width: 2),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -506,7 +530,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                                 shape: BoxShape.circle,
                                 color: isClockedIn 
                                     ? const Color(0xFF10B981) 
-                                    : (isOnBreak ? Colors.amberAccent : context.fg(0.38)),
+                                    : (isOnBreak ? _amber : context.fg(0.38)),
                                 boxShadow: [
                                   if (isClockedIn)
                                     BoxShadow(
@@ -528,7 +552,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                                 letterSpacing: 1.2,
                                 color: isClockedIn 
                                     ? const Color(0xFF10B981) 
-                                    : (isOnBreak ? Colors.amberAccent : context.fg(0.6)),
+                                    : (isOnBreak ? _amber : context.fg(0.6)),
                               ),
                             ),
                           ],
@@ -567,7 +591,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                       style: TextStyle(
                         color: isClockedIn 
                             ? const Color(0xFF10B981).withValues(alpha: 0.9) 
-                            : (isOnBreak ? Colors.amberAccent : context.fg(0.54)),
+                            : (isOnBreak ? _amber : context.fg(0.54)),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -592,9 +616,11 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                             children: [
                               const Icon(Icons.event_available, color: Color(0xFF10B981), size: 18),
                               const SizedBox(width: 8),
-                              Text(
-                                'Scheduled Shift: ${DateFormat('hh:mm a').format(scheduledShift.startTime.toLocal())} – ${DateFormat('hh:mm a').format(scheduledShift.endTime.toLocal())} @ ${scheduledShift.siteLocation}',
-                                style: const TextStyle(color: Color(0xFF10B981), fontSize: 13, fontWeight: FontWeight.bold),
+                              Flexible(
+                                child: Text(
+                                  'Scheduled shift: ${DateFormat('h:mm a').format(scheduledShift.startTime.toLocal())} – ${DateFormat('h:mm a').format(scheduledShift.endTime.toLocal())} · ${scheduledShift.siteLocation}',
+                                  style: const TextStyle(color: Color(0xFF059669), fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ],
                           ),
@@ -603,18 +629,20 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.amberAccent.withValues(alpha: 0.08),
+                            color: _amber.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.3)),
+                            border: Border.all(color: _amber.withValues(alpha: 0.3)),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.event_busy, color: Colors.amberAccent, size: 18),
+                              Icon(Icons.event_busy, color: _amber, size: 18),
                               SizedBox(width: 8),
-                              Text(
-                                'No Roster Scheduled Today (Admin must assign a shift before clocking in)',
-                                style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.w600),
+                              Flexible(
+                                child: Text(
+                                  'No shift rostered today. Ask your manager to roster you before clocking in.',
+                                  style: TextStyle(color: _amber, fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
                               ),
                             ],
                           ),
@@ -625,8 +653,10 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
 
                     // Primary Action Buttons
                     if (isOffDuty) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 16,
+                        runSpacing: 12,
                         children: [
                           SizedBox(
                             width: 220,
@@ -636,16 +666,15 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                               onPressed: _isProcessingAction ? () {} : _handleGPSClockIn,
                             ),
                           ),
-                          const SizedBox(width: 20),
                           SizedBox(
                             width: 180,
                             height: 52,
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF00E5FF)),
+                              icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF06B6D4)),
                               label: const Text('SCAN QR', style: TextStyle(fontWeight: FontWeight.bold)),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF00E5FF),
-                                side: BorderSide(color: const Color(0xFF00E5FF).withValues(alpha: 0.5)),
+                                foregroundColor: const Color(0xFF06B6D4),
+                                side: BorderSide(color: const Color(0xFF06B6D4).withValues(alpha: 0.5)),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               ),
                               onPressed: _showQRScanner,
@@ -660,28 +689,21 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         runSpacing: 12,
                         children: [
                           OutlinedButton.icon(
-                            icon: const Icon(Icons.coffee, color: Colors.amberAccent),
-                            label: const Text('LOG 30-MIN MEAL BREAK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.coffee, color: _amber),
+                            label: const Text('START BREAK', style: TextStyle(color: _amber, fontWeight: FontWeight.bold)),
                             style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.5)),
+                              side: BorderSide(color: _amber.withValues(alpha: 0.5)),
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
-                            onPressed: () async {
-                              await ref.read(clockServiceProvider).recordBreak(durationMinutes: 30, breakType: 'meal');
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('30-Minute Meal Break recorded for Fair Work compliance.'), backgroundColor: Colors.green),
-                                );
-                              }
-                            },
+                            onPressed: _isProcessingAction ? null : () => _runBreakAction(start: true),
                           ),
                           FilledButton.icon(
-                            icon: Icon(Icons.logout, color: context.fg()),
+                            icon: const Icon(Icons.logout),
                             label: const Text('CLOCK OUT', style: TextStyle(fontWeight: FontWeight.bold)),
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.redAccent.shade400,
-                              foregroundColor: context.fg(),
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
@@ -698,12 +720,11 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                           label: const Text('END BREAK & RESUME', style: TextStyle(fontWeight: FontWeight.bold)),
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
-                          onPressed: () async {
-                            await ref.read(clockServiceProvider).endBreak();
-                          },
+                          onPressed: _isProcessingAction ? null : () => _runBreakAction(start: false),
                         ),
                       ),
                     ],
@@ -713,48 +734,54 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
 
               const SizedBox(height: 24),
 
-              // 2. METRIC STATS ROW (Today's Key Performance Indicators)
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildMetricTile(
-                      icon: Icons.login,
-                      iconColor: const Color(0xFF10B981),
-                      title: 'First In',
-                      value: attendance.todayEvents.isNotEmpty
-                          ? DateFormat('hh:mm a').format(attendance.todayEvents.last.eventTime)
-                          : '--:--',
-                    ),
+              // 2. METRIC STATS (Today's Key Performance Indicators)
+              Builder(builder: (context) {
+                final clockIns = attendance.todayEvents.where((e) => e.eventType == 'clock_in').toList();
+                final firstIn = clockIns.isNotEmpty ? clockIns.last.eventTime.toLocal() : null;
+                // Fair Work: an unpaid meal break is due within 5 hours of starting work.
+                final breakDue = !isOffDuty &&
+                    attendance.lastClockIn != null &&
+                    DateTime.now().difference(attendance.lastClockIn!.toLocal()) - attendance.currentSegmentBreak >
+                        const Duration(hours: 5) &&
+                    attendance.currentSegmentBreak == Duration.zero &&
+                    !isOnBreak;
+                final tiles = [
+                  _buildMetricTile(
+                    icon: Icons.login,
+                    iconColor: const Color(0xFF10B981),
+                    title: 'First In',
+                    value: firstIn != null ? DateFormat('h:mm a').format(firstIn) : '--:--',
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildMetricTile(
-                      icon: Icons.coffee,
-                      iconColor: Colors.amberAccent,
-                      title: 'Breaks',
-                      value: '${attendance.totalBreakDuration.inMinutes} mins',
-                    ),
+                  _buildMetricTile(
+                    icon: Icons.coffee,
+                    iconColor: _amber,
+                    title: 'Breaks',
+                    value: '${attendance.totalBreakDuration.inMinutes} mins',
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildMetricTile(
-                      icon: Icons.timer,
-                      iconColor: const Color(0xFF3B82F6),
-                      title: 'Net Worked',
-                      value: _formatHoursMinutes(liveDuration),
-                    ),
+                  _buildMetricTile(
+                    icon: Icons.timer,
+                    iconColor: const Color(0xFF3B82F6),
+                    title: 'Net Worked',
+                    value: _formatHoursMinutes(liveDuration),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildMetricTile(
-                      icon: Icons.verified_user,
-                      iconColor: const Color(0xFF8B5CF6),
-                      title: 'Compliance',
-                      value: 'Fair Work OK',
-                    ),
+                  _buildMetricTile(
+                    icon: breakDue ? Icons.warning_amber_rounded : Icons.verified_user,
+                    iconColor: breakDue ? Colors.redAccent : const Color(0xFF8B5CF6),
+                    title: 'Compliance',
+                    value: breakDue ? 'Meal break due' : 'On track',
                   ),
-                ],
-              ),
+                ];
+                return LayoutBuilder(builder: (context, c) {
+                  const gap = 16.0;
+                  final columns = c.maxWidth >= 640 ? 4 : 2;
+                  final w = (c.maxWidth - gap * (columns - 1)) / columns;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [for (final t in tiles) SizedBox(width: w, child: t)],
+                  );
+                });
+              }),
 
               const SizedBox(height: 24),
 

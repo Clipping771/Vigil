@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../services/agent_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -6,7 +8,6 @@ import '../providers/exception_provider.dart';
 import '../models/exception_record.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/premium_card.dart';
-import '../widgets/animated_button.dart';
 import '../widgets/app_shell.dart';
 import 'package:intl/intl.dart';
 import '../widgets/staff_terminal_view.dart';
@@ -123,13 +124,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF7C3AED).withValues(alpha: 0.2),
-                        foregroundColor: const Color(0xFFA78BFA),
+                        foregroundColor: const Color(0xFF8B5CF6),
                         side: const BorderSide(color: Color(0xFF7C3AED)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       ),
                       icon: _isScanningCompliance
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFA78BFA)))
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B5CF6)))
                           : const Icon(Icons.policy_outlined, size: 16),
                       label: Text(_isScanningCompliance ? 'Auditing...' : 'Run Audit Scan', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       onPressed: _isScanningCompliance ? null : _triggerComplianceScan,
@@ -175,13 +176,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Wrap(
+              spacing: 14,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   'Workforce overview',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                const SizedBox(width: 14),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -229,6 +232,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ]
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   exceptions.isNotEmpty ? Icons.warning_amber_rounded : Icons.check_circle_outline,
@@ -236,13 +240,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   size: 20,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  '${exceptions.length} Pending Exceptions',
+                Flexible(
+                  child: Text(
+                  '${exceptions.length} pending exceptions',
                   style: TextStyle(
                     color: exceptions.isNotEmpty ? Colors.orange : Colors.green,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
                   ),
+                ),
                 ),
               ],
             ),
@@ -273,8 +278,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             value: '${workforce.onBreakCount}',
             subtitle: 'Fair work rest/meal',
             icon: Icons.coffee,
-            iconColor: Colors.amberAccent,
-            glowColor: Colors.amberAccent,
+            iconColor: const Color(0xFFF59E0B),
+            glowColor: const Color(0xFFF59E0B),
         ),
         _buildKpiCard(
             title: 'Actionable Alerts',
@@ -321,7 +326,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: TextStyle(color: context.fg(0.6), fontSize: 13, fontWeight: FontWeight.w500)),
+              Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.fg(0.6), fontSize: 13, fontWeight: FontWeight.w500))),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -352,10 +357,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
@@ -366,7 +375,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     child: const Icon(Icons.people_alt, color: Color(0xFF10B981), size: 20),
                   ),
                   const SizedBox(width: 14),
-                  Column(
+                  Flexible(
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
@@ -375,10 +385,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Live workforce attendance synced across all devices in real time',
+                        'Live attendance, updated in real time',
                         style: TextStyle(color: context.fg(0.54), fontSize: 13),
                       ),
                     ],
+                  ),
                   ),
                 ],
               ),
@@ -425,6 +436,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 final hours = worked.inHours;
                 final mins = worked.inMinutes % 60;
                 final durationStr = hours > 0 ? '${hours}h ${mins}m' : '${mins}m';
+                final compact = MediaQuery.sizeOf(context).width < 700;
 
                 return Row(
                   children: [
@@ -449,14 +461,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               shape: BoxShape.circle,
                               color: isClockedIn 
                                   ? const Color(0xFF10B981) 
-                                  : (isOnBreak ? Colors.amberAccent : context.fg(0.38)),
+                                  : (isOnBreak ? const Color(0xFFF59E0B) : context.fg(0.38)),
                               border: Border.all(color: context.surfaceHigh, width: 2),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: compact ? 12 : 16),
 
                     // Employee Name and Role/Location
                     Expanded(
@@ -464,13 +476,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text(
                                 staff.fullName,
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: context.fg()),
                               ),
-                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
@@ -487,6 +501,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           const SizedBox(height: 4),
                           Text(
                             '${staff.email} • ${staff.siteLocation}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(color: context.fg(0.54), fontSize: 12),
                           ),
                         ],
@@ -494,24 +510,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
 
                     // Live Status Badge & Ticking Time
+                    if (!compact) const SizedBox(width: 12),
                     Expanded(
                       flex: 3,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: isClockedIn 
                                       ? const Color(0xFF10B981).withValues(alpha: 0.15) 
-                                      : (isOnBreak ? Colors.amberAccent.withValues(alpha: 0.15) : context.fg().withValues(alpha: 0.05)),
+                                      : (isOnBreak ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : context.fg().withValues(alpha: 0.05)),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
                                     color: isClockedIn 
                                         ? const Color(0xFF10B981).withValues(alpha: 0.4) 
-                                        : (isOnBreak ? Colors.amberAccent.withValues(alpha: 0.4) : context.fg(0.1)),
+                                        : (isOnBreak ? const Color(0xFFF59E0B).withValues(alpha: 0.4) : context.fg(0.1)),
                                   ),
                                 ),
                                 child: Text(
@@ -523,12 +543,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     fontWeight: FontWeight.bold,
                                     color: isClockedIn 
                                         ? const Color(0xFF10B981) 
-                                        : (isOnBreak ? Colors.amberAccent : context.fg(0.54)),
+                                        : (isOnBreak ? const Color(0xFFF59E0B) : context.fg(0.54)),
                                   ),
                                 ),
                               ),
                               if (isClockedIn) ...[
-                                const SizedBox(width: 10),
                                 Text(
                                   '$durationStr on duty',
                                   style: GoogleFonts.firaCode(
@@ -543,7 +562,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           const SizedBox(height: 4),
                           Text(
                             staff.shiftStartTime != null
-                                ? 'Shift started at ${DateFormat('hh:mm a').format(staff.shiftStartTime!)}'
+                                ? 'Started ${DateFormat('h:mm a').format(staff.shiftStartTime!.toLocal())}'
                                 : 'No active shift today',
                             style: TextStyle(fontSize: 11, color: context.fg(0.38)),
                           ),
@@ -551,8 +570,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
 
-                    // Location / GPS Tag
-                    Expanded(
+                    // Location / GPS Tag (hidden on narrow screens)
+                    if (!compact) Expanded(
                       flex: 2,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -563,7 +582,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               Icon(
                                 staff.isGeofenced ? Icons.verified_outlined : Icons.location_on_outlined,
                                 size: 14,
-                                color: staff.isGeofenced ? const Color(0xFF10B981) : Colors.amberAccent,
+                                color: staff.isGeofenced ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -621,7 +640,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Widget _buildExceptionFilterChip(String key, String label, {Color? color}) {
     final isSelected = _exceptionFilter == key;
-    final activeColor = color ?? const Color(0xFF38BDF8);
+    final activeColor = color ?? const Color(0xFF0EA5E9);
 
     return InkWell(
       onTap: () => setState(() => _exceptionFilter = key),
@@ -661,8 +680,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               const SizedBox(width: 10),
               Text(
                 inserted > 0
-                    ? 'Compliance audit complete: $inserted new breach(es) detected and logged!'
-                    : 'Compliance audit complete: 100% Fair Work compliant, no new breaches!',
+                    ? 'Scan complete: $inserted new issue(s) found.'
+                    : 'Scan complete: no new issues found.',
               ),
             ],
           ),
@@ -674,8 +693,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Audit scan error: $e'),
-          backgroundColor: Colors.red,
+          content: const Text('The compliance scan failed. Check your connection and try again.'),
         ));
       }
     } finally {
@@ -684,7 +702,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _showResolveDialog(BuildContext context, dynamic ex) async {
-    final noteController = TextEditingController(text: ex.description ?? '');
+    final noteController = TextEditingController();
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -744,14 +762,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             onPressed: () async {
               Navigator.pop(ctx);
-              await ref.read(exceptionServiceProvider).ignoreException(ex.id, reason: 'Dismissed: ${noteController.text}');
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Exception dismissed/ignored.'),
-                  backgroundColor: Colors.blueGrey,
-                  behavior: SnackBarBehavior.floating,
-                ));
-              }
+              await _runExceptionAction(
+                () => ref.read(exceptionServiceProvider).ignoreException(ex.id, reason: noteController.text.trim().isEmpty ? null : noteController.text.trim()),
+                'Exception dismissed.',
+              );
             },
             child: const Text('Dismiss / Ignore'),
           ),
@@ -760,14 +774,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             icon: const Icon(Icons.check, size: 16),
             onPressed: () async {
               Navigator.pop(ctx);
-              await ref.read(exceptionServiceProvider).resolveException(ex.id, resolutionNote: noteController.text);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Exception resolved and signed off.'),
-                  backgroundColor: Color(0xFF10B981),
-                  behavior: SnackBarBehavior.floating,
-                ));
-              }
+              await _runExceptionAction(
+                () => ref.read(exceptionServiceProvider).resolveException(ex.id, resolutionNote: noteController.text.trim().isEmpty ? null : noteController.text.trim()),
+                'Exception resolved.',
+              );
             },
             label: const Text('Mark Resolved', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
@@ -782,7 +792,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final isHigh = ex.severity == 'high';
     final severityColor = isCritical 
         ? const Color(0xFFDC2626) 
-        : (isHigh ? theme.colorScheme.error : (ex.severity == 'medium' ? Colors.orangeAccent : const Color(0xFF38BDF8)));
+        : (isHigh ? theme.colorScheme.error : (ex.severity == 'medium' ? Colors.orange.shade700 : const Color(0xFF0EA5E9)));
 
     final isResolving = _resolvingExceptionId == ex.id;
     final hasSuggestion = _aiSuggestion != null && _resolvingExceptionId == ex.id;
@@ -822,13 +832,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
                             title,
                             style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.fg()),
                           ),
-                          const SizedBox(width: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
@@ -841,7 +853,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: severityColor, letterSpacing: 1),
                             ),
                           ),
-                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
@@ -864,7 +875,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       const SizedBox(height: 8),
                       Text(ex.description ?? '', style: TextStyle(color: context.fg(0.7), fontSize: 14)),
                       const SizedBox(height: 12),
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 4,
                         children: [
                           const Icon(Icons.person, size: 16, color: Color(0xFF3B82F6)),
                           const SizedBox(width: 6),
@@ -887,14 +900,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
+                      const SizedBox(height: 14),
                     if (!isResolved) ...[
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           if (status == 'pending') ...[
                             OutlinedButton.icon(
@@ -905,25 +915,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
-                              onPressed: () => _simulateAIResolve(ex.id),
+                              onPressed: () => _requestAiSuggestion(ex as ExceptionRecord),
                             ),
-                            const SizedBox(width: 8),
                             OutlinedButton(
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.amber,
+                                foregroundColor: const Color(0xFFD97706),
                                 side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
-                              onPressed: () => ref.read(exceptionServiceProvider).acknowledgeException(ex.id),
+                              onPressed: () => _runExceptionAction(
+                                () => ref.read(exceptionServiceProvider).acknowledgeException(ex.id),
+                                'Exception acknowledged.',
+                              ),
                               child: const Text('Acknowledge', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
-                            const SizedBox(width: 8),
                           ],
                           FilledButton.icon(
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(0xFF10B981),
-                              foregroundColor: context.fg(),
+                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             ),
@@ -951,7 +962,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ),
                     ],
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -969,9 +981,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                    ),
                    child: Row(
                      children: [
-                       SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF))),
+                       SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF06B6D4))),
                        SizedBox(width: 16),
-                       Text('Synthesizing historical patterns & anomaly scoring...', style: TextStyle(color: context.fg(0.7), fontStyle: FontStyle.italic)),
+                       Expanded(child: Text('Asking Vigil AI for a recommendation…', style: TextStyle(color: context.fg(0.7), fontStyle: FontStyle.italic))),
                      ],
                    ),
                  ),
@@ -993,28 +1005,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                      children: [
                        Row(
                          children: [
-                           const Icon(Icons.auto_awesome, color: Color(0xFF00E5FF), size: 20),
+                           const Icon(Icons.auto_awesome, color: Color(0xFF06B6D4), size: 20),
                            const SizedBox(width: 12),
-                           Text('AI Anomaly Resolution Recommendation', style: TextStyle(fontWeight: FontWeight.bold, color: context.fg(), fontSize: 16)),
+                           Expanded(child: Text('AI recommendation', style: TextStyle(fontWeight: FontWeight.bold, color: context.fg(), fontSize: 16))),
                          ],
                        ),
                        const SizedBox(height: 12),
                        Text(_aiSuggestion!, style: TextStyle(fontSize: 14, color: context.fg(0.7), height: 1.5)),
-                       const SizedBox(height: 20),
-                       Row(
+                       const SizedBox(height: 8),
+                       Text('AI-generated — verify before acting.', style: Theme.of(context).textTheme.bodySmall),
+                       const SizedBox(height: 16),
+                       Wrap(
+                         spacing: 12,
+                         runSpacing: 8,
                          children: [
-                           SizedBox(
-                             width: 180,
-                             height: 44,
-                             child: AnimatedButton(
-                               text: 'Apply AI Sign-off',
-                               onPressed: () {
-                                 ref.read(exceptionServiceProvider).resolveException(ex.id, resolutionNote: _aiSuggestion);
-                                 setState(() { _resolvingExceptionId = null; _aiSuggestion = null; });
-                               },
-                             ),
+                           FilledButton.icon(
+                             icon: const Icon(Icons.check, size: 16),
+                             label: const Text('Resolve with this note'),
+                             onPressed: () {
+                               final note = 'AI-assisted: ${_aiSuggestion!}';
+                               setState(() { _resolvingExceptionId = null; _aiSuggestion = null; });
+                               _runExceptionAction(
+                                 () => ref.read(exceptionServiceProvider).resolveException(ex.id, resolutionNote: note),
+                                 'Exception resolved.',
+                               );
+                             },
                            ),
-                           const SizedBox(width: 16),
                            TextButton(
                              onPressed: () => setState(() { _resolvingExceptionId = null; _aiSuggestion = null; }),
                              child: Text('Discard', style: TextStyle(color: context.fg(0.54))),
@@ -1031,19 +1047,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  void _simulateAIResolve(String exceptionId) {
+  Future<void> _requestAiSuggestion(ExceptionRecord ex) async {
     setState(() {
-      _resolvingExceptionId = exceptionId;
+      _resolvingExceptionId = ex.id;
       _aiSuggestion = null;
     });
+    try {
+      final text = await ref.read(agentServiceProvider).suggestResolution(
+            type: ex.typeTitle,
+            severity: ex.severity,
+            description: ex.description ?? '',
+            employeeName: ex.employeeName,
+          );
+      if (mounted && _resolvingExceptionId == ex.id) setState(() => _aiSuggestion = text);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _resolvingExceptionId = null);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e is AgentUnavailable ? e.message : 'Vigil AI is unavailable right now.'),
+        action: SnackBarAction(label: 'Settings', onPressed: () => context.go('/settings')),
+      ));
+    }
+  }
 
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted && _resolvingExceptionId == exceptionId) {
-        setState(() {
-          _aiSuggestion = "Vigil AI Engine: Pattern analysis shows regular shift schedule with zero unauthorized deviation history. Isolation Forest & XGBoost scored 0.02 anomaly risk. Recommendation: Approve automatically and clear flag.";
-        });
-      }
-    });
+  Future<void> _runExceptionAction(Future<void> Function() action, String success) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await action();
+      messenger.showSnackBar(SnackBar(content: Text(success)));
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('Could not update the exception. You may not have permission.')));
+    }
   }
 }
 

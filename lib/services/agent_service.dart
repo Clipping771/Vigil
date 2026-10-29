@@ -11,6 +11,13 @@ import '../providers/staff_provider.dart';
 
 final agentServiceProvider = Provider((ref) => AgentService(ref));
 
+class AgentUnavailable implements Exception {
+  final String message;
+  const AgentUnavailable(this.message);
+  @override
+  String toString() => message;
+}
+
 class AgentService {
   final Ref _ref;
 
@@ -23,8 +30,7 @@ class AgentService {
     
     Available Actions:
     1. toggle_theme: Switch the app's theme. 
-       Payload MUST be EXACTLY one of: "deepSpace", "cyberpunk", "arcticLight", "forestGlow", "crimsonVoid".
-       Do not output "dark" or "light".
+       Payload MUST be exactly "light" or "dark".
        
     2. navigate: Go to a specific page.
        Valid paths: "/dashboard", "/rosters", "/staff", "/leave", "/reports", "/settings"
@@ -60,6 +66,32 @@ class AgentService {
       debugPrint('Agent error: $e');
       return "Sorry, I couldn't process that request. Please try again.";
     }
+  }
+
+  /// Asks the configured model for a short recommendation on how a manager
+  /// should handle [exception]. Throws [AgentUnavailable] with a readable reason.
+  Future<String> suggestResolution({
+    required String type,
+    required String severity,
+    required String description,
+    String? employeeName,
+  }) async {
+    const system = 'You are a workforce compliance advisor for shift-based teams in Australia. '
+        'Given one attendance exception, reply in at most 3 short sentences: the likely cause, '
+        'what the manager should verify, and whether to resolve, acknowledge or escalate. '
+        'Do not invent facts that are not in the exception. Plain text only.';
+    final prompt = 'Exception type: $type\nSeverity: $severity\n'
+        'Employee: ${employeeName ?? 'unknown'}\nDetails: $description';
+    final text = (await _callLLM(prompt, system)).trim();
+    if (text.startsWith('{')) {
+      try {
+        final data = jsonDecode(text);
+        if (data is Map && data['action'] == 'error') throw AgentUnavailable(data['payload'].toString());
+      } on FormatException {
+        // Model returned JSON-looking text; fall through and show it.
+      }
+    }
+    return text;
   }
 
   Future<String> _callLLM(String prompt, String systemPrompt) async {
@@ -143,24 +175,17 @@ class AgentService {
     switch (action) {
       case 'toggle_theme':
         final themeStr = payload?.toString().toLowerCase() ?? '';
-        if (themeStr.contains('arctic') || themeStr.contains('light')) {
-          _ref.read(themeProvider.notifier).setTheme(AppTheme.arcticLight);
-          return "I've switched the theme to Arctic Light.";
-        } else if (themeStr.contains('cyberpunk')) {
-          _ref.read(themeProvider.notifier).setTheme(AppTheme.cyberpunk);
-          return "I've switched the theme to Cyberpunk.";
-        } else if (themeStr.contains('forest')) {
-          _ref.read(themeProvider.notifier).setTheme(AppTheme.forestGlow);
-          return "I've switched the theme to Forest Glow.";
-        } else if (themeStr.contains('crimson')) {
-          _ref.read(themeProvider.notifier).setTheme(AppTheme.crimsonVoid);
-          return "I've switched the theme to Crimson Void.";
-        } else if (themeStr.contains('deep') || themeStr.contains('dark')) {
-          _ref.read(themeProvider.notifier).setTheme(AppTheme.deepSpace);
-          return "I've switched the theme to Deep Space.";
+        final notifier = _ref.read(themeProvider.notifier);
+        if (themeStr.contains('light')) {
+          notifier.setTheme(AppTheme.light);
+          return "Switched to light mode.";
+        } else if (themeStr.contains('dark')) {
+          notifier.setTheme(AppTheme.dark);
+          return "Switched to dark mode.";
         }
-        return "I didn't understand which theme you wanted.";
-      
+        notifier.toggle();
+        return "Switched to ${_ref.read(themeProvider).currentTheme.label.toLowerCase()} mode.";
+
       case 'navigate':
         const allowedPaths = {'/dashboard', '/rosters', '/staff', '/leave', '/reports', '/settings', '/geofence'};
         if (payload is! String || !allowedPaths.contains(payload)) {

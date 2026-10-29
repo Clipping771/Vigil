@@ -156,7 +156,9 @@ class ExceptionEngine {
     for (var shift in upcomingShifts) {
       for (var leave in approvedLeave) {
         if (shift.employeeId == leave.employeeId && leave.status == 'approved') {
-          if (shift.startTime.isBefore(leave.endDate) && shift.endTime.isAfter(leave.startDate)) {
+          // Leave dates are whole days: the leave covers through the end of endDate.
+          final leaveEnd = DateTime(leave.endDate.year, leave.endDate.month, leave.endDate.day).add(const Duration(days: 1));
+          if (shift.startTime.isBefore(leaveEnd) && shift.endTime.isAfter(leave.startDate)) {
             exceptions.add(ExceptionRecord(
               id: '',
               organizationId: organizationId,

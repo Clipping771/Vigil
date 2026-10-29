@@ -33,6 +33,22 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
   }
 
   Future<void> _deleteShift(String shiftId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove shift?'),
+        content: const Text('The employee will no longer be rostered for this shift.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     try {
       await Supabase.instance.client.from('shifts').delete().eq('id', shiftId);
       ref.invalidate(rosterProvider);
@@ -41,7 +57,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting shift: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not remove the shift. You may not have permission.')));
       }
     }
   }
@@ -53,13 +69,21 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
   }
 
   Future<void> _showAddShiftDialog() async {
-    final staffAsync = ref.read(staffProvider);
-    if (!staffAsync.hasValue || staffAsync.value!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No employees found to assign shifts.')));
+    final List<Employee> employees;
+    try {
+      employees = await ref.read(staffProvider.future);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load your team. Try again.')));
+      }
+      return;
+    }
+    if (!mounted) return;
+    if (employees.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invite employees from the Staff page before adding shifts.')));
       return;
     }
 
-    final employees = staffAsync.value!;
     Employee? selectedEmployee = employees.first;
     TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
     TimeOfDay endTime = const TimeOfDay(hour: 17, minute: 0);
@@ -102,7 +126,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                           Expanded(
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(foregroundColor: context.fg(), side: BorderSide(color: context.fg(0.24))),
-                              icon: const Icon(Icons.access_time, color: Color(0xFF38BDF8)),
+                              icon: const Icon(Icons.access_time, color: Color(0xFF0EA5E9)),
                               label: Text('Start: ${startTime.format(context)}'),
                               onPressed: () async {
                                 final time = await showTimePicker(context: context, initialTime: startTime);
@@ -114,7 +138,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                           Expanded(
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(foregroundColor: context.fg(), side: BorderSide(color: context.fg(0.24))),
-                              icon: const Icon(Icons.access_time, color: Color(0xFF38BDF8)),
+                              icon: const Icon(Icons.access_time, color: Color(0xFF0EA5E9)),
                               label: Text('End: ${endTime.format(context)}'),
                               onPressed: () async {
                                 final time = await showTimePicker(context: context, initialTime: endTime);
@@ -140,7 +164,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                   child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF38BDF8), foregroundColor: Colors.black),
+                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0EA5E9), foregroundColor: Colors.black),
                   onPressed: isSaving ? null : () async {
                     if (selectedEmployee == null || siteController.text.trim().isEmpty) return;
                     setDialogState(() => isSaving = true);
@@ -203,7 +227,8 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
     final groupedShiftsAsync = ref.watch(shiftsByDayProvider);
     final staffAsync = ref.watch(staffProvider);
     final user = ref.watch(authProvider).currentUser;
-    final bool isAdminOrManager = user?.role == 'admin' || user?.role == 'owner' || user?.role == 'system_admin' || user?.role == 'manager';
+    final bool isAdminOrManager = user?.isManager ?? false;
+    final compact = MediaQuery.sizeOf(context).width < 700;
     final theme = Theme.of(context);
 
     // Map employee IDs to full names
@@ -214,10 +239,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: Text(
-          isAdminOrManager ? 'Team Rosters & Scheduling' : 'My Work Schedule', 
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: context.fg()),
-        ),
+        title: Text(isAdminOrManager ? 'Rosters' : 'My schedule'),
         leading: ShellMenuButton.maybe(context),
         actions: [
           IconButton(
@@ -227,27 +249,35 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
           ),
           if (isAdminOrManager) ...[
             const SizedBox(width: 8),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF38BDF8), foregroundColor: Colors.black),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Shift', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: _showAddShiftDialog,
-            ),
+            compact
+                ? IconButton.filled(tooltip: 'Add shift', icon: const Icon(Icons.add), onPressed: _showAddShiftDialog)
+                : FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add shift'),
+                    onPressed: _showAddShiftDialog,
+                  ),
           ],
           const SizedBox(width: 16),
         ],
       ),
       body: groupedShiftsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err', style: const TextStyle(color: Colors.redAccent))),
+        error: (err, stack) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Could not load the roster.'),
+              const SizedBox(height: 12),
+              OutlinedButton(onPressed: () => ref.invalidate(rosterProvider), child: const Text('Try again')),
+            ],
+          ),
+        ),
         data: (shiftsMap) {
           final selectedShifts = _selectedDay != null ? _getShiftsForDay(_selectedDay!, shiftsMap) : [];
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          return ListView(
+            padding: EdgeInsets.all(compact ? 12 : 24),
+            children: [
                 PremiumCard(
                   blurRadius: 20,
                   opacity: 0.1,
@@ -264,7 +294,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                       outsideDaysVisible: false,
                       defaultTextStyle: TextStyle(color: context.fg()),
                       weekendTextStyle: TextStyle(color: context.fg(0.7)),
-                      markerDecoration: const BoxDecoration(color: Color(0xFF00E5FF), shape: BoxShape.circle),
+                      markerDecoration: const BoxDecoration(color: Color(0xFF06B6D4), shape: BoxShape.circle),
                       selectedDecoration: BoxDecoration(
                         color: const Color(0xFF7C3AED).withValues(alpha: 0.5),
                         shape: BoxShape.circle,
@@ -317,25 +347,28 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      _selectedDay != null 
-                        ? (isSameDay(_selectedDay, DateTime.now()) ? 'Today\'s Shifts' : DateFormat('EEEE, MMM d').format(_selectedDay!))
-                        : 'Select a day',
-                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: context.fg()),
+                    Flexible(
+                      child: Text(
+                        _selectedDay != null
+                            ? (isSameDay(_selectedDay, DateTime.now()) ? 'Today\'s shifts' : DateFormat('EEEE, MMM d').format(_selectedDay!))
+                            : 'Select a day',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: const Color(0xFF00E5FF).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                      child: Text('${selectedShifts.length} Shifts', style: const TextStyle(color: Color(0xFF00E5FF), fontWeight: FontWeight.bold, fontSize: 12)),
+                      decoration: BoxDecoration(color: const Color(0xFF06B6D4).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
+                      child: Text('${selectedShifts.length} Shifts', style: const TextStyle(color: Color(0xFF06B6D4), fontWeight: FontWeight.bold, fontSize: 12)),
                     )
                   ],
                 ).animate().fadeIn(delay: 200.ms),
                 const SizedBox(height: 16),
                 
                 // List of shifts for the selected day
-                Expanded(
-                  child: selectedShifts.isEmpty
-                      ? Center(
+                if (selectedShifts.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -356,7 +389,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 32.0),
                                 child: Text(
                                   isAdminOrManager
-                                      ? 'Click "Add Shift" above to assign an employee to this date.'
+                                      ? 'Use "Add shift" to roster an employee on this date.'
                                       : 'You have no scheduled shifts for this date. Your manager has not published a roster yet.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(fontSize: 14, color: context.fg(0.38)),
@@ -364,12 +397,12 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                               ),
                             ],
                           ),
-                        )
-                      : ListView.builder(
-                          key: ValueKey(_selectedDay),
-                          itemCount: selectedShifts.length,
-                          itemBuilder: (context, index) {
-                            final shift = selectedShifts[index];
+                    ),
+                  )
+                else
+                  for (var index = 0; index < selectedShifts.length; index++)
+                    Builder(builder: (context) {
+                            final Shift shift = selectedShifts[index];
                             final timeFormat = DateFormat('h:mm a');
                             final empDisplayName = employeeNames[shift.employeeId] ?? 'Staff (${shift.employeeId.substring(0, 8)})';
                             
@@ -388,7 +421,7 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                         shape: BoxShape.circle,
                                         border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.3)),
                                       ),
-                                      child: const Icon(Icons.badge_outlined, color: Color(0xFF60A5FA), size: 20),
+                                      child: const Icon(Icons.badge_outlined, color: Color(0xFF3B82F6), size: 20),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
@@ -400,7 +433,8 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                             style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: context.fg()),
                                           ),
                                           const SizedBox(height: 4),
-                                          Row(
+                                          Wrap(
+                                            crossAxisAlignment: WrapCrossAlignment.center,
                                             children: [
                                               Icon(Icons.access_time, size: 14, color: context.fg(0.54)),
                                               const SizedBox(width: 4),
@@ -424,11 +458,8 @@ class _RostersScreenState extends ConsumerState<RostersScreen> {
                                 ),
                               ),
                             ).animate().fadeIn(delay: (50 * index).ms).slideX(begin: 0.1, end: 0);
-                          },
-                        ),
-                ),
-              ],
-            ),
+                    }),
+            ],
           );
         },
       ),

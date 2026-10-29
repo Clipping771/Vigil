@@ -160,7 +160,7 @@ class _MisconfiguredApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(AppTheme.deepSpace),
+      theme: buildAppTheme(AppTheme.dark),
       home: Scaffold(
         body: Center(
           child: Padding(

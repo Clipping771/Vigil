@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8090", "--directory", "build/web"],
       "port": 8090
+    },
+    {
+      "name": "vigil-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8091", "--directory", "build/preview"],
+      "port": 8091
     }
   ]
 }

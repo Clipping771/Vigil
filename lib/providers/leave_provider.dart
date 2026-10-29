@@ -37,6 +37,7 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
   final Ref _ref;
   final _supabase = Supabase.instance.client;
   RealtimeChannel? _realtimeChannel;
+  Timer? _debounce;
 
   LeaveNotifier(this._ref) : super(LeaveState(isLoading: true)) {
     loadLeaveRequests();
@@ -44,20 +45,26 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
   }
 
   void _setupRealtime() {
-    try {
-      _realtimeChannel = _supabase.channel('public_leave_requests_feed')
-        ..onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'leave_requests',
-          callback: (_) {
-            loadLeaveRequests(silent: true);
-          },
-        )
-        ..subscribe();
-    } catch (_) {
-      // Realtime channel fail-safe
-    }
+    final user = _ref.read(authProvider).currentUser;
+    if (user == null) return;
+    _realtimeChannel = _supabase.channel('leave_requests_${user.organizationId}')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'leave_requests',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'organization_id',
+          value: user.organizationId,
+        ),
+        callback: (_) {
+          _debounce?.cancel();
+          _debounce = Timer(const Duration(milliseconds: 400), () {
+            if (mounted) loadLeaveRequests(silent: true);
+          });
+        },
+      )
+      ..subscribe();
   }
 
   Future<void> loadLeaveRequests({bool silent = false}) async {
@@ -73,26 +80,27 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
 
     try {
       // 1. Fetch leave requests with joined employee data
-      var query = _supabase.from('leave_requests').select('*, employees(full_name, email, role, site_location)');
-
-      if (user.role != 'system_admin') {
-        query = query.eq('organization_id', user.organizationId);
-      }
-
-      final response = await query.order('start_date', ascending: false);
+      final response = await _supabase
+          .from('leave_requests')
+          .select('*, employees(full_name, email, role, site_location)')
+          .eq('organization_id', user.organizationId)
+          .order('start_date', ascending: false);
       
       final list = (response as List).map((json) => LeaveRequest.fromJson(json)).toList();
       state = LeaveState(requests: list, isLoading: false);
     } catch (e) {
       // Fallback: If Supabase foreign key join encounters an issue, fetch employees separately
       try {
-        var plainQuery = _supabase.from('leave_requests').select();
-        if (user.role != 'system_admin') {
-          plainQuery = plainQuery.eq('organization_id', user.organizationId);
-        }
-        final plainRes = await plainQuery.order('start_date', ascending: false);
-        
-        final empRes = await _supabase.from('employees').select('id, full_name, email, role, site_location');
+        final plainRes = await _supabase
+            .from('leave_requests')
+            .select()
+            .eq('organization_id', user.organizationId)
+            .order('start_date', ascending: false);
+
+        final empRes = await _supabase
+            .from('employees')
+            .select('id, full_name, email, role, site_location')
+            .eq('organization_id', user.organizationId);
         final Map<String, Map<String, dynamic>> empMap = {};
         for (var emp in (empRes as List)) {
           empMap[emp['id'].toString()] = emp;
@@ -122,14 +130,20 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
   }) async {
     final user = _ref.read(authProvider).currentUser;
     if (user == null) return false;
+    final start = DateTime(startDate.year, startDate.month, startDate.day);
+    final end = DateTime(endDate.year, endDate.month, endDate.day);
+    if (end.isBefore(start)) throw Exception('The end date must be on or after the start date.');
+    final overlapping = state.requests.any((r) =>
+        r.employeeId == employeeId && !r.isDeclined && !r.startDate.isAfter(end) && !r.endDate.isBefore(start));
+    if (overlapping) throw Exception('There is already a leave request covering these dates.');
 
     try {
       final insertData = {
         'organization_id': user.organizationId,
         'employee_id': employeeId,
         'leave_type': leaveType,
-        'start_date': startDate.toIso8601String().substring(0, 10),
-        'end_date': endDate.toIso8601String().substring(0, 10),
+        'start_date': _dateOnly(start),
+        'end_date': _dateOnly(end),
         'reason': reason == null || reason.trim().isEmpty ? null : reason.trim(),
         'status': 'pending',
       };
@@ -165,8 +179,12 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
     }
   }
 
+  static String _dateOnly(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   @override
   void dispose() {
+    _debounce?.cancel();
     _realtimeChannel?.unsubscribe();
     super.dispose();
   }

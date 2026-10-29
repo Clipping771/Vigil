@@ -1,7 +1,9 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../theme/ui.dart';
 
+/// Standard content card: theme surface, hairline border, soft shadow.
+///
+/// [blurRadius] and [opacity] are accepted for backwards compatibility and
+/// ignored — backdrop blur was expensive on web and muddy in light mode.
 class PremiumCard extends StatelessWidget {
   final Widget child;
   final double blurRadius;
@@ -22,38 +24,23 @@ class PremiumCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
-    // For dark themes, we want a slight white/primary tint. For light themes, a slight dark/primary tint.
-    final baseColor = isDark ? theme.colorScheme.primary : theme.colorScheme.primary;
-    final borderColor = isDark ? context.fg() : Colors.black;
+    final radius = BorderRadius.circular(16);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24.0),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blurRadius, sigmaY: blurRadius),
-          child: Container(
-            decoration: BoxDecoration(
-              color: baseColor.withValues(alpha: opacity),
-              borderRadius: BorderRadius.circular(24.0),
-              border: Border.all(
-                color: borderColor.withValues(alpha: 0.15),
-                width: 1.0,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 20,
-                  spreadRadius: -5,
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: padding,
-              child: child,
-            ),
+    return Material(
+      color: theme.colorScheme.surface,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(color: theme.colorScheme.outline),
+            boxShadow: isDark
+                ? null
+                : [BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 2))],
           ),
+          child: Padding(padding: padding, child: child),
         ),
       ),
     );
