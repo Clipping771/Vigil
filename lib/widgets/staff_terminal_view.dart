@@ -116,7 +116,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
         // Outside authorized geofence radius
         if (mounted) {
           await _showGeofenceDialog(
-            distance: closestDistance ?? 0,
+            distance: closestDistance,
             onAuthorizeRemote: () async {
               Navigator.of(context).pop();
               await _executeClockEvent(
@@ -152,14 +152,16 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
   }
 
   /// Returns whether [position] is inside any of the organization's geofence
-  /// zones, the matched zone name, and the distance to the closest zone.
+  /// zones, the matched zone name, and the distance to the closest zone's
+  /// boundary (null when the organization has no zones configured).
   Future<(bool, String?, double?)> _matchZone(Position position) async {
     final zones = await ref.read(geofenceProvider.future);
     double? closest;
     for (final zone in zones) {
       final distance = Geolocator.distanceBetween(position.latitude, position.longitude, zone.latitude, zone.longitude);
-      if (closest == null || distance < closest) closest = distance;
-      if (distance <= zone.radiusMeters) return (true, zone.name, distance);
+      if (distance <= zone.radiusMeters) return (true, zone.name, 0.0);
+      final toBoundary = distance - zone.radiusMeters;
+      if (closest == null || toBoundary < closest) closest = toBoundary;
     }
     return (false, null, closest);
   }
@@ -297,10 +299,12 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
   }
 
   Future<void> _showGeofenceDialog({
-    required double distance,
+    required double? distance,
     required VoidCallback onAuthorizeRemote,
   }) async {
-    final distanceText = distance > 1000 
+    final distanceText = distance == null
+        ? ''
+        : distance > 1000 
         ? '${(distance / 1000).toStringAsFixed(1)} km' 
         : '${distance.toStringAsFixed(0)} m';
 
@@ -337,7 +341,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
               ),
               const SizedBox(height: 12),
               Text(
-                'You are currently $distanceText away from the nearest authorized site boundary.',
+                distance == null
+                    ? 'Your organization has no work sites set up yet, so your location cannot be verified. Ask a manager to add a geofence zone.'
+                    : 'You are $distanceText outside the nearest authorized work site.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: context.fg(0.7), fontSize: 15, height: 1.5),
               ),
