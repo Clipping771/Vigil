@@ -18,19 +18,26 @@ class ReportingEngine {
     DateTime? from,
     DateTime? to,
   }) async {
-    var query = _supabase
-        .from('exception_records')
-        .select('*, employees(full_name, email, role, site_location)')
-        .eq('organization_id', organizationId);
-    if (from != null) query = query.gte('created_at', from.toUtc().toIso8601String());
-    if (to != null) query = query.lt('created_at', to.toUtc().toIso8601String());
-    final response = await query.order('created_at', ascending: false);
-    return response.map((json) => ExceptionRecord.fromJson(json)).toList();
+    Future<List<ExceptionRecord>> run(String columns) async {
+      var query = _supabase.from('exception_records').select(columns).eq('organization_id', organizationId);
+      if (from != null) query = query.gte('created_at', from.toUtc().toIso8601String());
+      if (to != null) query = query.lt('created_at', to.toUtc().toIso8601String());
+      final response = await query.order('created_at', ascending: false);
+      return response.map((json) => ExceptionRecord.fromJson(json)).toList();
+    }
+
+    try {
+      return await run('*, employees!exception_records_employee_id_fkey(full_name, email, role, site_location), '
+          'reviewer:employees!exception_records_reviewed_by_fkey(full_name)');
+    } on PostgrestException {
+      // Before migration 003 there is no reviewer relationship.
+      return run('*, employees(full_name, email, role, site_location)');
+    }
   }
 
   String buildCsv(List<ExceptionRecord> exceptions) {
     final rows = <List<Object?>>[
-      ['Date', 'Employee', 'Email', 'Site', 'Type', 'Severity', 'Status', 'Description', 'Resolved at', 'Resolution note'],
+      ['Date', 'Employee', 'Email', 'Site', 'Type', 'Severity', 'Status', 'Description', 'Reviewed by', 'Reviewed at', 'Resolution note'],
       for (final ex in exceptions)
         [
           _dateFmt.format(ex.createdAt.toLocal()),
@@ -41,7 +48,8 @@ class ReportingEngine {
           ex.severity,
           ex.status,
           ex.description ?? '',
-          ex.resolvedAt != null ? _dateFmt.format(ex.resolvedAt!.toLocal()) : '',
+          ex.reviewedByName ?? '',
+          (ex.reviewedAt ?? ex.resolvedAt) != null ? _dateFmt.format((ex.reviewedAt ?? ex.resolvedAt)!.toLocal()) : '',
           ex.resolutionNote ?? '',
         ],
     ];

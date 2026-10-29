@@ -12,6 +12,7 @@ import '../services/agent_service.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/staff_terminal_view.dart';
 import '../widgets/ui_kit.dart';
+import '../widgets/review_trail.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -331,10 +332,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ].join('  ·  '),
                         style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                       ),
-                      if (ex.resolutionNote != null && ex.resolutionNote!.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text('Note: ${ex.resolutionNote}',
-                            style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontStyle: FontStyle.italic)),
+                      if (!ex.isPending) ...[
+                        const SizedBox(height: 12),
+                        ReviewTrail(ex),
                       ],
                     ],
                   ),

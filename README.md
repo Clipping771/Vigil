@@ -21,10 +21,12 @@ Workforce attendance, rostering and compliance platform — Flutter (web, mobile
 Fresh project:
 
 1. `database/schema.sql`
-2. `database/migrations/001_production_security.sql`
-3. `database/enable_realtime.sql`
+2. `database/migrations/001_production_security.sql` — RLS, roles, sign-up
+3. `database/migrations/002_exception_rules.sql` — exception types, server-side no-show detection (enable `pg_cron` first)
+4. `database/migrations/003_exception_review.sql` — who reviewed each issue, audit log, staff see only their own issues
+5. `database/enable_realtime.sql`
 
-Existing prototype database: run **only** `database/migrations/001_production_security.sql`. It re-enables RLS, replaces all prototype policies and is safe to re-run.
+Existing database: run the migrations in order (each is idempotent and safe to re-run), then `enable_realtime.sql`.
 
 In **Auth → URL configuration**, set the Site URL to your deployed web origin so confirmation and password-reset links return to the app.
 
@@ -70,7 +72,11 @@ Database security tests (needs a local PostgreSQL; never run against production)
 psql -d vigil_test -f database/tests/supabase_stub.sql
 psql -d vigil_test -f database/schema.sql
 psql -d vigil_test -f database/migrations/001_production_security.sql
+psql -d vigil_test -f database/migrations/002_exception_rules.sql
+psql -d vigil_test -f database/migrations/003_exception_review.sql
 psql -d vigil_test -f database/tests/rls_tests.sql   # prints PASS/FAIL per scenario
+psql -d vigil_test -f database/tests/exception_rules_tests.sql
+psql -d vigil_test -f database/tests/exception_review_tests.sql
 ```
 
 Preview the signed-in app with sample data (no backend):

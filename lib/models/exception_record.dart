@@ -15,6 +15,11 @@ class ExceptionRecord {
   final String? siteLocation;
   final String? resolutionNote;
 
+  /// Who resolved, acknowledged or dismissed it, and when (set by the database).
+  final String? reviewedById;
+  final String? reviewedByName;
+  final DateTime? reviewedAt;
+
   ExceptionRecord({
     required this.id,
     required this.organizationId,
@@ -31,7 +36,18 @@ class ExceptionRecord {
     this.employeeRole,
     this.siteLocation,
     this.resolutionNote,
+    this.reviewedById,
+    this.reviewedByName,
+    this.reviewedAt,
   });
+
+  /// "Resolved", "Acknowledged" or "Dismissed" — the past-tense review verb.
+  String get reviewVerb => switch (status.toLowerCase()) {
+        'resolved' => 'Resolved',
+        'acknowledged' => 'Acknowledged',
+        'ignored' => 'Dismissed',
+        _ => 'Updated',
+      };
 
   bool get isPending => status.toLowerCase() == 'pending';
   bool get isResolved => status.toLowerCase() == 'resolved';
@@ -64,6 +80,7 @@ class ExceptionRecord {
     final empData = json['employees'] is Map<String, dynamic>
         ? json['employees'] as Map<String, dynamic>
         : null;
+    final reviewer = json['reviewer'] is Map<String, dynamic> ? json['reviewer'] as Map<String, dynamic> : null;
 
     return ExceptionRecord(
       id: json['id']?.toString() ?? '',
@@ -85,6 +102,9 @@ class ExceptionRecord {
       employeeRole: json['employee_role']?.toString() ?? empData?['role']?.toString(),
       siteLocation: json['site_location']?.toString() ?? empData?['site_location']?.toString(),
       resolutionNote: json['resolution_note']?.toString(),
+      reviewedById: json['reviewed_by']?.toString(),
+      reviewedByName: reviewer?['full_name']?.toString(),
+      reviewedAt: json['reviewed_at'] != null ? DateTime.tryParse(json['reviewed_at'].toString()) : null,
     );
   }
 
@@ -120,6 +140,9 @@ class ExceptionRecord {
     String? employeeRole,
     String? siteLocation,
     String? resolutionNote,
+    String? reviewedById,
+    String? reviewedByName,
+    DateTime? reviewedAt,
   }) {
     return ExceptionRecord(
       id: id ?? this.id,
@@ -137,6 +160,9 @@ class ExceptionRecord {
       employeeRole: employeeRole ?? this.employeeRole,
       siteLocation: siteLocation ?? this.siteLocation,
       resolutionNote: resolutionNote ?? this.resolutionNote,
+      reviewedById: reviewedById ?? this.reviewedById,
+      reviewedByName: reviewedByName ?? this.reviewedByName,
+      reviewedAt: reviewedAt ?? this.reviewedAt,
     );
   }
 }

@@ -10,6 +10,9 @@ import '../providers/attendance_provider.dart';
 import '../providers/geofence_provider.dart';
 import '../providers/roster_provider.dart';
 import '../services/clock_service.dart';
+import '../providers/auth_provider.dart';
+import '../providers/exception_provider.dart';
+import 'review_trail.dart';
 import 'ui_kit.dart';
 
 /// Personal punch clock: status, live timer, clock in/out, breaks, today's log.
@@ -208,9 +211,95 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
     );
   }
 
+  /// Tells the employee when a manager reviews one of their issues, or when a
+  /// new one is raised (e.g. right after a late clock-in).
+  void _notifyIssueChanges(ExceptionState? prev, ExceptionState next, String myId) {
+    if (prev == null || prev.isLoading) return;
+    final before = {for (final e in prev.allExceptions) e.id: e};
+    for (final e in next.allExceptions.where((e) => e.employeeId == myId)) {
+      final old = before[e.id];
+      String? message;
+      if (old == null) {
+        message = 'New issue on your record: ${e.typeTitle}.';
+      } else if (old.status != e.status && !e.isPending) {
+        final who = e.reviewedByName != null ? ' by ${e.reviewedByName}' : '';
+        final note = (e.resolutionNote ?? '').trim().isEmpty ? '' : ' — “${e.resolutionNote!.trim()}”';
+        message = '${e.typeTitle}: ${e.reviewVerb.toLowerCase()}$who$note';
+      }
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 6)));
+        return;
+      }
+    }
+  }
+
+  Widget _myIssues(String myId) {
+    final t = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final mine = ref.watch(exceptionStateProvider).allExceptions.where((e) => e.employeeId == myId).toList();
+    final open = mine.where((e) => e.isPending || e.isAcknowledged).length;
+    final shown = mine.take(10).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(
+          'My issues',
+          subtitle: mine.isEmpty ? 'Compliance issues on your record appear here' : '$open open · ${mine.length} total',
+        ),
+        Card(
+          child: shown.isEmpty
+              ? const EmptyState(icon: Icons.task_alt, title: 'No issues', message: 'Nice work — nothing on your record.')
+              : Column(
+                  children: [
+                    for (var i = 0; i < shown.length; i++) ...[
+                      if (i > 0) const Divider(indent: 16, endIndent: 16),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Builder(builder: (context) {
+                          final e = shown[i];
+                          final (label, tone) = e.isResolved
+                              ? ('Resolved', Tone.success)
+                              : e.isIgnored
+                                  ? ('Dismissed', Tone.neutral)
+                                  : e.isAcknowledged
+                                      ? ('Seen by manager', Tone.primary)
+                                      : ('Awaiting review', Tone.warning);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(e.typeTitle, style: t.titleSmall),
+                                  StatusChip(label, tone: tone),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(e.description ?? '', style: t.bodyMedium),
+                              const SizedBox(height: 4),
+                              Text(DateFormat('d MMM, h:mm a').format(e.createdAt.toLocal()),
+                                  style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                              if (!e.isPending) ...[const SizedBox(height: 10), ReviewTrail(e)],
+                            ],
+                          );
+                        }),
+                      ),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
   // ---------------------------------------------------------------- build
   @override
   Widget build(BuildContext context) {
+    final myId = ref.watch(authProvider.select((s) => s.currentUser?.id)) ?? '';
+    ref.listen<ExceptionState>(exceptionStateProvider, (prev, next) => _notifyIssueChanges(prev, next, myId));
     final a = ref.watch(attendanceProvider);
     final shift = ref.watch(todayShiftProvider).value;
     final t = Theme.of(context).textTheme;
@@ -372,6 +461,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                   ],
                 ),
         ),
+        _myIssues(myId),
       ],
     );
   }

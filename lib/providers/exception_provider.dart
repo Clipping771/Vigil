@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/exception_record.dart';
+import '../models/employee.dart';
 import '../models/clock_event.dart';
 import '../models/shift.dart';
 import '../models/leave_request.dart';
@@ -85,6 +86,10 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
 
   Timer? _debounce;
 
+  /// Staff only ever see their own issues (also enforced by RLS in migration 003).
+  static List<ExceptionRecord> _visibleTo(Employee user, List<ExceptionRecord> list) =>
+      user.isManager ? list : list.where((e) => e.employeeId == user.id).toList();
+
   Future<void> fetchExceptions({bool silent = false}) async {
     final user = _ref.read(authProvider).currentUser;
     if (user == null) {
@@ -97,14 +102,16 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
     }
 
     try {
-      // 1. Fetch with joined employee details
+      // 1. Fetch with the affected employee and the reviewer joined. Both are
+      // foreign keys to employees, so the relationships are named explicitly.
       final response = await _supabase
           .from('exception_records')
-          .select('*, employees(full_name, email, role, site_location)')
+          .select('*, employees!exception_records_employee_id_fkey(full_name, email, role, site_location), '
+              'reviewer:employees!exception_records_reviewed_by_fkey(full_name)')
           .eq('organization_id', user.organizationId)
           .order('created_at', ascending: false);
       final list = (response as List).map((json) => ExceptionRecord.fromJson(json)).toList();
-      state = ExceptionState(allExceptions: list, isLoading: false);
+      state = ExceptionState(allExceptions: _visibleTo(user, list), isLoading: false);
     } catch (e) {
       // Fallback: If foreign join is not supported, query plain and map employee details
       try {
@@ -125,13 +132,15 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
 
         final list = (plainRes as List).map((json) {
           final emp = empMap[json['employee_id']?.toString()];
+          final reviewer = empMap[json['reviewed_by']?.toString()];
           return ExceptionRecord.fromJson({
             ...json,
             'employees': ?emp,
+            'reviewer': ?reviewer,
           });
         }).toList();
 
-        state = ExceptionState(allExceptions: list, isLoading: false);
+        state = ExceptionState(allExceptions: _visibleTo(user, list), isLoading: false);
       } catch (err) {
         state = state.copyWith(isLoading: false, error: err.toString());
       }
