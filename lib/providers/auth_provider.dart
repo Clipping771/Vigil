@@ -13,11 +13,16 @@ class AuthState {
   final bool initialized;
   final String? error;
 
+  /// True after opening a password-reset email link: the user must choose a
+  /// new password before continuing.
+  final bool passwordRecovery;
+
   const AuthState({
     this.currentUser,
     this.isLoading = false,
     this.initialized = false,
     this.error,
+    this.passwordRecovery = false,
   });
 
   bool get isAuthenticated => currentUser != null;
@@ -35,27 +40,54 @@ class AuthNotifier extends StateNotifier<AuthState> {
   StreamSubscription<dynamic>? _authSub;
 
   Future<void> _init() async {
-    final session = _supabase.auth.currentSession;
-    if (session != null) {
-      await _bootstrap();
-    } else {
-      state = const AuthState(initialized: true);
-    }
-
-    _authSub = _supabase.auth.onAuthStateChange.listen((data) {
-      if (data.event == AuthChangeEvent.signedOut) {
-        state = const AuthState(initialized: true);
+    // Listen first so sessions created from an email link (sign-up
+    // confirmation, invite, password reset) are picked up.
+    _authSub = _supabase.auth.onAuthStateChange.listen((data) async {
+      switch (data.event) {
+        case AuthChangeEvent.signedOut:
+          state = const AuthState(initialized: true);
+        case AuthChangeEvent.passwordRecovery:
+          await _bootstrap(passwordRecovery: true);
+        case AuthChangeEvent.signedIn:
+          // login()/signUp() bootstrap themselves; this covers email links.
+          if (!state.isLoading && state.currentUser == null) await _bootstrap();
+        default:
+          break;
       }
     });
+
+    final session = _supabase.auth.currentSession;
+    if (session != null) {
+      if (state.currentUser == null) await _bootstrap();
+    } else {
+      state = AuthState(initialized: true, error: _linkErrorFromUrl());
+    }
+  }
+
+  /// Supabase appends `error_description` to the redirect URL when an email
+  /// link is expired or was already used.
+  String? _linkErrorFromUrl() {
+    if (!kIsWeb) return null;
+    final params = {...Uri.base.queryParameters, ...Uri.splitQueryString(Uri.base.fragment.contains('=') ? Uri.base.fragment.split('?').last : '')};
+    final code = params['error_code'];
+    if (code == null && params['error'] == null) return null;
+    if (code == 'otp_expired') {
+      return 'That email link has expired or was already used. Sign in, or request a new link below.';
+    }
+    return params['error_description']?.replaceAll('+', ' ') ?? 'That email link is no longer valid.';
   }
 
   /// Resolves (and on first sign-in, links or creates) the employee profile for
   /// the authenticated Supabase user via the `link_current_user` RPC.
-  Future<void> _bootstrap() async {
+  Future<void> _bootstrap({bool passwordRecovery = false}) async {
     try {
       final response = await _supabase.rpc('link_current_user');
       final row = response is List ? response.first : response;
-      state = AuthState(initialized: true, currentUser: Employee.fromJson(Map<String, dynamic>.from(row)));
+      state = AuthState(
+        initialized: true,
+        currentUser: Employee.fromJson(Map<String, dynamic>.from(row)),
+        passwordRecovery: passwordRecovery || state.passwordRecovery,
+      );
     } on PostgrestException catch (e) {
       await _supabase.auth.signOut();
       state = AuthState(initialized: true, error: e.message);
@@ -111,6 +143,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Sets a new password for the signed-in user (after a reset link).
+  Future<void> updatePassword(String newPassword) async {
+    await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+    state = AuthState(initialized: true, currentUser: state.currentUser);
+  }
+
   Future<void> sendPasswordReset(String email) async {
     await _supabase.auth.resetPasswordForEmail(
       email,
@@ -125,7 +163,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void clearError() {
     if (state.error != null) {
-      state = AuthState(initialized: state.initialized, currentUser: state.currentUser);
+      state = AuthState(initialized: state.initialized, currentUser: state.currentUser, passwordRecovery: state.passwordRecovery);
     }
   }
 

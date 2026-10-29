@@ -17,6 +17,7 @@ import 'screens/landing_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/geofence_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/reset_password_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'widgets/app_shell.dart';
@@ -61,6 +62,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
 
       final user = auth.currentUser;
+      if (user != null && auth.passwordRecovery) {
+        return path == '/reset-password' ? null : '/reset-password';
+      }
+      if (path == '/reset-password') return user == null ? '/login' : '/dashboard';
       if (path == '/splash') {
         final from = state.uri.queryParameters['from'];
         if (user == null) return (from != null && _publicPaths.contains(Uri.parse(from).path)) ? from : '/';
@@ -68,6 +73,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (user == null) {
+        // An expired/used email link lands on '/': show the reason on sign-in.
+        if (path == '/' && auth.error != null) return '/login';
         return isPublic ? null : '/login?from=${Uri.encodeComponent(state.uri.toString())}';
       }
 
@@ -85,6 +92,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/register', builder: (context, state) => const RegistrationScreen()),
+      GoRoute(path: '/reset-password', builder: (context, state) => const ResetPasswordScreen()),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
