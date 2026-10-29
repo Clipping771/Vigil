@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +9,8 @@ import '../providers/staff_provider.dart';
 import '../providers/roster_provider.dart';
 import '../widgets/premium_card.dart';
 import '../models/leave_request.dart';
+import '../widgets/app_shell.dart';
+import '../theme/ui.dart';
 import '../models/shift.dart';
 
 class LeaveScreen extends ConsumerStatefulWidget {
@@ -40,7 +41,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Row(
             children: [
-              Icon(isApproved ? Icons.check_circle : Icons.cancel, color: Colors.white, size: 20),
+              Icon(isApproved ? Icons.check_circle : Icons.cancel, color: context.fg(), size: 20),
               const SizedBox(width: 10),
               Text('Leave request successfully marked as ${status.toUpperCase()}'),
             ],
@@ -65,14 +66,14 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: context.surfaceHigh,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Cancel Leave Request?', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to withdraw this leave request? This action cannot be undone.', style: TextStyle(color: Colors.white70)),
+        title: Text('Cancel Leave Request?', style: GoogleFonts.outfit(color: context.fg(), fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to withdraw this leave request? This action cannot be undone.', style: TextStyle(color: context.fg(0.7))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep', style: TextStyle(color: Colors.white54)),
+            child: Text('Keep', style: TextStyle(color: context.fg(0.54))),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
@@ -135,11 +136,11 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
             final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
 
             return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
+              backgroundColor: context.surfaceHigh,
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                side: BorderSide(color: context.fg().withValues(alpha: 0.1)),
               ),
               title: Row(
                 children: [
@@ -156,8 +157,8 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('New Leave Request', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
-                        Text('Submit for manager approval & roster review', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12)),
+                        Text('New Leave Request', style: GoogleFonts.outfit(color: context.fg(), fontWeight: FontWeight.bold, fontSize: 20)),
+                        Text('Submit for manager approval & roster review', style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 12)),
                       ],
                     ),
                   ),
@@ -172,18 +173,18 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                     children: [
                       // Employee Selector (if Manager/Admin)
                       if (isManager && staffList.isNotEmpty) ...[
-                        const Text('APPLYING FOR EMPLOYEE', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                        Text('APPLYING FOR EMPLOYEE', style: TextStyle(color: context.fg(0.54), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String>(
                           initialValue: selectedEmployeeId,
-                          dropdownColor: const Color(0xFF0F172A),
-                          style: const TextStyle(color: Colors.white),
+                          dropdownColor: context.surfaceLowest,
+                          style: TextStyle(color: context.fg()),
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: Colors.white.withValues(alpha: 0.05),
+                            fillColor: context.fg().withValues(alpha: 0.05),
                             prefixIcon: const Icon(Icons.person_outline, color: Color(0xFF38BDF8)),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
                           ),
                           items: [
                             DropdownMenuItem(
@@ -203,18 +204,18 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                       ],
 
                       // Leave Type Selector
-                      const Text('LEAVE TYPE', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      Text('LEAVE TYPE', style: TextStyle(color: context.fg(0.54), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         initialValue: selectedType,
-                        dropdownColor: const Color(0xFF0F172A),
-                        style: const TextStyle(color: Colors.white),
+                        dropdownColor: context.surfaceLowest,
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           filled: true,
-                          fillColor: Colors.white.withValues(alpha: 0.05),
+                          fillColor: context.fg().withValues(alpha: 0.05),
                           prefixIcon: Icon(_getLeaveTypeIcon(selectedType), color: _getLeaveTypeColor(selectedType)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
                         ),
                         items: const [
                           DropdownMenuItem(value: 'annual', child: Text('🌴 Annual Leave (Paid)')),
@@ -234,7 +235,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('LEAVE DATES', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                          Text('LEAVE DATES', style: TextStyle(color: context.fg(0.54), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
@@ -259,11 +260,11 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                             builder: (context, child) {
                               return Theme(
                                 data: Theme.of(context).copyWith(
-                                  colorScheme: const ColorScheme.dark(
+                                  colorScheme: ColorScheme.dark(
                                     primary: Color(0xFF38BDF8),
                                     onPrimary: Colors.black,
-                                    surface: Color(0xFF1E293B),
-                                    onSurface: Colors.white,
+                                    surface: context.surfaceHigh,
+                                    onSurface: context.fg(),
                                   ),
                                 ),
                                 child: child!,
@@ -278,9 +279,9 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: context.fg().withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            border: Border.all(color: context.fg().withValues(alpha: 0.1)),
                           ),
                           child: Row(
                             children: [
@@ -289,10 +290,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                               Expanded(
                                 child: Text(
                                   '${dateFormat.format(dateRange.start)}   →   ${dateFormat.format(dateRange.end)}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                                  style: TextStyle(color: context.fg(), fontSize: 14, fontWeight: FontWeight.w500),
                                 ),
                               ),
-                              const Icon(Icons.edit_calendar, color: Colors.white38, size: 18),
+                              Icon(Icons.edit_calendar, color: context.fg(0.38), size: 18),
                             ],
                           ),
                         ),
@@ -300,19 +301,19 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                       const SizedBox(height: 20),
 
                       // Reason / Note
-                      const Text('REASON / NOTES', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      Text('REASON / NOTES', style: TextStyle(color: context.fg(0.54), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                       const SizedBox(height: 8),
                       TextField(
                         controller: reasonController,
                         maxLines: 3,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           hintText: 'Add details, medical certificate notes, or travel plans...',
-                          hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+                          hintStyle: TextStyle(color: context.fg(0.3), fontSize: 13),
                           filled: true,
-                          fillColor: Colors.white.withValues(alpha: 0.05),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                          fillColor: context.fg().withValues(alpha: 0.05),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
                         ),
                       ),
                     ],
@@ -323,7 +324,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
               actions: [
                 TextButton(
                   onPressed: isSubmitting ? null : () => Navigator.pop(dialogCtx),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
                 ),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
@@ -355,9 +356,9 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                             if (context.mounted) {
                               Navigator.pop(dialogCtx);
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: const Row(
+                                content: Row(
                                   children: [
-                                    Icon(Icons.check_circle, color: Colors.white),
+                                    Icon(Icons.check_circle, color: context.fg()),
                                     SizedBox(width: 10),
                                     Text('Leave request submitted successfully!'),
                                   ],
@@ -477,8 +478,6 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         title: Row(
           children: [
             Container(
@@ -490,16 +489,13 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
               child: const Icon(Icons.beach_access, color: Color(0xFF38BDF8), size: 20),
             ),
             const SizedBox(width: 12),
-            Text('Leave & Holiday Management', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20)),
+            Text('Leave & Holiday Management', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: context.fg(), fontSize: 20)),
           ],
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => context.go('/dashboard'),
-        ),
+        leading: ShellMenuButton.maybe(context),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white70),
+            icon: Icon(Icons.refresh, color: context.fg(0.7)),
             tooltip: 'Refresh Data',
             onPressed: () => ref.read(leaveStateProvider.notifier).loadLeaveRequests(),
           ),
@@ -542,9 +538,9 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                             children: [
                               const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
                               const SizedBox(height: 12),
-                              Text('Failed to load leave requests', style: GoogleFonts.outfit(fontSize: 18, color: Colors.white)),
+                              Text('Failed to load leave requests', style: GoogleFonts.outfit(fontSize: 18, color: context.fg())),
                               const SizedBox(height: 8),
-                              Text(leaveState.error!, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                              Text(leaveState.error!, style: TextStyle(color: context.fg(0.54), fontSize: 13)),
                               const SizedBox(height: 16),
                               FilledButton(
                                 onPressed: () => ref.read(leaveStateProvider.notifier).loadLeaveRequests(),
@@ -668,11 +664,11 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                Text(title, style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                 const SizedBox(height: 4),
-                Text(value, style: GoogleFonts.outfit(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                Text(value, style: GoogleFonts.outfit(color: context.fg(), fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11), overflow: TextOverflow.ellipsis),
+                Text(subtitle, style: TextStyle(color: context.fg().withValues(alpha: 0.4), fontSize: 11), overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -716,14 +712,14 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
               child: TextField(
                 controller: _searchController,
                 onChanged: (val) => setState(() => _searchQuery = val),
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+                style: TextStyle(color: context.fg(), fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search staff or notes...',
-                  hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, size: 18, color: Colors.white38),
+                  hintStyle: TextStyle(color: context.fg(0.3), fontSize: 13),
+                  prefixIcon: Icon(Icons.search, size: 18, color: context.fg(0.38)),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 16, color: Colors.white38),
+                          icon: Icon(Icons.clear, size: 16, color: context.fg(0.38)),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -731,10 +727,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.04),
+                  fillColor: context.fg().withValues(alpha: 0.04),
                   contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.08))),
                 ),
               ),
             ),
@@ -746,11 +742,11 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                 label: const Text('My Requests Only', style: TextStyle(fontSize: 12)),
                 selected: _onlyMyRequests,
                 onSelected: (val) => setState(() => _onlyMyRequests = val),
-                backgroundColor: Colors.white.withValues(alpha: 0.04),
+                backgroundColor: context.fg().withValues(alpha: 0.04),
                 selectedColor: const Color(0xFF38BDF8).withValues(alpha: 0.2),
                 checkmarkColor: const Color(0xFF38BDF8),
-                side: BorderSide(color: _onlyMyRequests ? const Color(0xFF38BDF8) : Colors.white.withValues(alpha: 0.1)),
-                labelStyle: TextStyle(color: _onlyMyRequests ? const Color(0xFF38BDF8) : Colors.white70),
+                side: BorderSide(color: _onlyMyRequests ? const Color(0xFF38BDF8) : context.fg().withValues(alpha: 0.1)),
+                labelStyle: TextStyle(color: _onlyMyRequests ? const Color(0xFF38BDF8) : context.fg(0.7)),
               ),
             ],
           ],
@@ -768,17 +764,17 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF38BDF8).withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.04),
+          color: isSelected ? const Color(0xFF38BDF8).withValues(alpha: 0.15) : context.fg().withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? const Color(0xFF38BDF8) : Colors.white.withValues(alpha: 0.08),
+            color: isSelected ? const Color(0xFF38BDF8) : context.fg().withValues(alpha: 0.08),
             width: isSelected ? 1.5 : 1,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? const Color(0xFF38BDF8) : Colors.white70,
+            color: isSelected ? const Color(0xFF38BDF8) : context.fg(0.7),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             fontSize: 13,
           ),
@@ -838,7 +834,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                       children: [
                         Row(
                           children: [
-                            Text(displayName, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                            Text(displayName, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.fg())),
                             if (isOwnRequest) ...[
                               const SizedBox(width: 8),
                               Container(
@@ -856,10 +852,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
+                                  color: context.fg().withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Text(req.employeeRole!.toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.w600)),
+                                child: Text(req.employeeRole!.toUpperCase(), style: TextStyle(fontSize: 10, color: context.fg(0.7), fontWeight: FontWeight.w600)),
                               ),
                             ],
                           ],
@@ -868,13 +864,13 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                         Row(
                           children: [
                             if (req.employeeEmail != null) ...[
-                              Text(req.employeeEmail!, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                              Text(req.employeeEmail!, style: TextStyle(color: context.fg(0.38), fontSize: 12)),
                               const SizedBox(width: 12),
                             ],
                             if (req.employeeSite != null) ...[
-                              const Icon(Icons.location_on_outlined, size: 13, color: Colors.white38),
+                              Icon(Icons.location_on_outlined, size: 13, color: context.fg(0.38)),
                               const SizedBox(width: 3),
-                              Text(req.employeeSite!, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                              Text(req.employeeSite!, style: TextStyle(color: context.fg(0.38), fontSize: 12)),
                             ],
                           ],
                         ),
@@ -912,7 +908,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                     if (req.isPending && (isOwnRequest || isManager)) ...[
                       const SizedBox(width: 8),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 20, color: Colors.white38),
+                        icon: Icon(Icons.delete_outline, size: 20, color: context.fg(0.38)),
                         tooltip: 'Withdraw Request',
                         onPressed: () => _deleteLeaveRequest(req.id),
                       ),
@@ -922,7 +918,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            const Divider(color: Colors.white10, height: 1),
+            Divider(color: context.fg(0.1), height: 1),
             const SizedBox(height: 16),
 
             // Middle Row: Leave Type, Date Range, Duration
@@ -948,19 +944,19 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                   ),
                 ),
                 const SizedBox(width: 20),
-                const Icon(Icons.date_range, size: 15, color: Colors.white54),
+                Icon(Icons.date_range, size: 15, color: context.fg(0.54)),
                 const SizedBox(width: 6),
-                Text(dates, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                Text(dates, style: TextStyle(color: context.fg(), fontSize: 13, fontWeight: FontWeight.w500)),
                 const SizedBox(width: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
+                    color: context.fg().withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     '$totalDays ${totalDays == 1 ? 'Day' : 'Days'}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: context.fg(0.7), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ),
                 if (req.isOngoingToday) ...[
@@ -1009,19 +1005,19 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.03),
+                  color: context.fg().withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                  border: Border.all(color: context.fg().withValues(alpha: 0.06)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.format_quote, size: 16, color: Colors.white38),
+                    Icon(Icons.format_quote, size: 16, color: context.fg(0.38)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         req.reason!,
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13, fontStyle: FontStyle.italic),
+                        style: TextStyle(color: context.fg().withValues(alpha: 0.75), fontSize: 13, fontStyle: FontStyle.italic),
                       ),
                     ),
                   ],
@@ -1050,7 +1046,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
+                      foregroundColor: context.fg(),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -1075,19 +1071,19 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
+              color: context.fg().withValues(alpha: 0.04),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.beach_access, size: 48, color: Colors.white24),
+            child: Icon(Icons.beach_access, size: 48, color: context.fg(0.24)),
           ),
           const SizedBox(height: 16),
-          Text('No Leave Requests Found', style: GoogleFonts.outfit(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
+          Text('No Leave Requests Found', style: GoogleFonts.outfit(fontSize: 20, color: context.fg(), fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text(
             _searchQuery.isNotEmpty
                 ? 'No requests matched your filter or search criteria.'
                 : 'There are currently no leave applications in this view.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
+            style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 13),
           ),
           const SizedBox(height: 20),
           FilledButton.icon(

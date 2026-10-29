@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../widgets/premium_card.dart';
-import '../widgets/animated_button.dart';
+import '../widgets/app_shell.dart';
 
 class LandingScreen extends StatelessWidget {
   const LandingScreen({super.key});
@@ -11,276 +9,312 @@ class LandingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
-      body: Stack(
-        children: [
-          // Background Glows
-          Positioned(
-            top: -200,
-            left: -200,
-            child: Container(
-              width: 500,
-              height: 500,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
-                boxShadow: [
-                  BoxShadow(color: const Color(0xFF00E5FF).withValues(alpha: 0.2), blurRadius: 200, spreadRadius: 100),
-                ],
-              ),
-            ),
-          ).animate(onPlay: (controller) => controller.repeat(reverse: true)).move(duration: 5.seconds, begin: const Offset(0, 0), end: const Offset(50, 50)),
-          
-          Positioned(
-            bottom: -200,
-            right: -200,
-            child: Container(
-              width: 600,
-              height: 600,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
-                boxShadow: [
-                  BoxShadow(color: const Color(0xFF7C3AED).withValues(alpha: 0.2), blurRadius: 200, spreadRadius: 100),
-                ],
-              ),
-            ),
-          ).animate(onPlay: (controller) => controller.repeat(reverse: true)).move(duration: 7.seconds, begin: const Offset(0, 0), end: const Offset(-50, -50)),
-
-          CustomScrollView(
-            slivers: [
-              _buildAppBar(context),
-              SliverToBoxAdapter(child: _buildHeroSection(context)),
-              SliverToBoxAdapter(child: _buildFeaturesSection(context)),
-              SliverToBoxAdapter(child: _buildPricingSection(context)),
-              SliverToBoxAdapter(child: _buildFooter(context)),
-            ],
-          ),
+      body: CustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(child: _NavBar()),
+          const SliverToBoxAdapter(child: _Hero()),
+          const SliverToBoxAdapter(child: _Features()),
+          const SliverToBoxAdapter(child: _HowItWorks()),
+          const SliverToBoxAdapter(child: _CallToAction()),
+          const SliverToBoxAdapter(child: _Footer()),
         ],
       ),
     );
   }
+}
 
-  Widget _buildAppBar(BuildContext context) {
-    return SliverAppBar(
-      pinned: true,
-      backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      title: Row(
-        children: [
-          const Icon(Icons.security, color: Color(0xFF00E5FF), size: 28)
-              .animate()
-              .scale(delay: 200.ms, duration: 400.ms, curve: Curves.easeOutBack),
-          const SizedBox(width: 8),
-          Text(
-            'Vigil',
-            style: GoogleFonts.outfit(
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              letterSpacing: 1.5,
-              fontSize: 26,
-            ),
-          ).animate().fadeIn(delay: 300.ms).moveX(begin: -10, end: 0),
-        ],
+/// Centers page content at a readable max width with responsive gutters.
+class _Section extends StatelessWidget {
+  final Widget child;
+  final double vertical;
+  const _Section({required this.child, this.vertical = 72});
+
+  @override
+  Widget build(BuildContext context) {
+    final gutter = MediaQuery.sizeOf(context).width < 600 ? 20.0 : 40.0;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1160),
+        child: Padding(padding: EdgeInsets.symmetric(horizontal: gutter, vertical: vertical), child: child),
       ),
-      actions: [
-        TextButton(
-          onPressed: () {},
-          child: Text('Features', style: GoogleFonts.inter(color: Colors.white70)),
-        ).animate().fadeIn(delay: 400.ms),
-        TextButton(
-          onPressed: () {},
-          child: Text('Pricing', style: GoogleFonts.inter(color: Colors.white70)),
-        ).animate().fadeIn(delay: 500.ms),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 140,
-          child: AnimatedButton(
-            text: 'Login',
-            onPressed: () => context.go('/login'),
-          ),
-        ).animate().fadeIn(delay: 600.ms).scale(curve: Curves.easeOutBack),
-        const SizedBox(width: 24),
-      ],
     );
   }
+}
 
-  Widget _buildHeroSection(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 140, horizontal: 24),
+class _NavBar extends StatelessWidget {
+  const _NavBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    return _Section(
+      vertical: 20,
+      child: Row(
+        children: [
+          const BrandMark(size: 32),
+          const SizedBox(width: 10),
+          const Text('Vigil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const Spacer(),
+          TextButton(onPressed: () => context.go('/login'), child: const Text('Sign in')),
+          if (!compact) ...[
+            const SizedBox(width: 8),
+            FilledButton(onPressed: () => context.go('/register'), child: const Text('Get started')),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Hero extends StatelessWidget {
+  const _Hero();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final headlineSize = width < 600 ? 36.0 : (width < 1000 ? 48.0 : 60.0);
+
+    return _Section(
+      vertical: width < 600 ? 40 : 88,
       child: Column(
         children: [
-
-          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+            ),
+            child: Text('Attendance · Rostering · Compliance',
+                style: TextStyle(color: theme.colorScheme.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(height: 28),
           Text(
-            'Predictive Compliance,\nZero Friction.',
+            'Know who\'s on shift.\nCatch compliance issues early.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              fontSize: 72,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
+            style: theme.textTheme.displaySmall?.copyWith(
+              fontSize: headlineSize,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1.2,
               height: 1.1,
-              letterSpacing: -2.0,
             ),
-          ).animate().fadeIn(delay: 200.ms, duration: 800.ms).slideY(begin: 0.2, end: 0, curve: Curves.easeOutQuad),
+          ),
           const SizedBox(height: 24),
-          Text(
-            'Vigil uses advanced machine learning to proactively detect missed clock-ins,\nroster breaches, and timesheet fraud before they hit payroll.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 20,
-              color: Colors.white54,
-              height: 1.6,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Text(
+              'Vigil gives frontline teams a geofenced punch clock and gives managers a live view of attendance, '
+              'rosters, leave and Fair Work exceptions — all in one secure, multi-tenant workspace.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w400,
+                height: 1.55,
+              ),
             ),
-          ).animate().fadeIn(delay: 400.ms, duration: 800.ms).slideY(begin: 0.2, end: 0, curve: Curves.easeOutQuad),
-          const SizedBox(height: 48),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          ),
+          const SizedBox(height: 36),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              SizedBox(
-                width: 200,
-                child: AnimatedButton(
-                  text: 'Access Workspace',
-                  onPressed: () => context.go('/login'),
-                ),
-              ).animate().fadeIn(delay: 600.ms).scale(curve: Curves.easeOutBack),
-              const SizedBox(width: 16),
+              FilledButton.icon(
+                onPressed: () => context.go('/register'),
+                icon: const Icon(Icons.arrow_forward, size: 18),
+                label: const Text('Create your workspace'),
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 50), padding: const EdgeInsets.symmetric(horizontal: 24)),
+              ),
               OutlinedButton(
-                onPressed: () {},
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 26),
-                  textStyle: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: const Text('View Documentation'),
-              ).animate().fadeIn(delay: 700.ms).scale(curve: Curves.easeOutBack),
+                onPressed: () => context.go('/login'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50), padding: const EdgeInsets.symmetric(horizontal: 24)),
+                child: const Text('Sign in to your team'),
+              ),
             ],
           ),
         ],
-      ),
+      ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.06, end: 0),
     );
   }
+}
 
-  Widget _buildFeaturesSection(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 100, horizontal: 24),
+class _Features extends StatelessWidget {
+  const _Features();
+
+  static const _items = [
+    (Icons.share_location_outlined, 'Geofenced punch clock',
+        'Staff clock in and out from their phone. GPS is checked against your work sites and out-of-zone punches are flagged.'),
+    (Icons.monitor_heart_outlined, 'Live workforce board',
+        'See who is on shift, on break or missing in real time, streamed straight from the database.'),
+    (Icons.calendar_month_outlined, 'Rosters & scheduling',
+        'Plan shifts on a calendar, spot leave conflicts, and give every employee a clear view of their week.'),
+    (Icons.event_available_outlined, 'Leave management',
+        'Request, approve and track annual, sick and personal leave with balances and roster-conflict checks.'),
+    (Icons.policy_outlined, 'Compliance exceptions',
+        'Late starts, overtime, missed breaks and geofence breaches become actionable items for managers to resolve.'),
+    (Icons.lock_outline, 'Secure by default',
+        'Every organization is isolated with row-level security. Roles control exactly who can see and change what.'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _Section(
       child: Column(
         children: [
-          Text(
-            'Advanced AI Capabilities',
-            style: GoogleFonts.outfit(
-              fontSize: 40,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ).animate().fadeIn(duration: 800.ms).slideY(begin: 0.2, end: 0),
-          const SizedBox(height: 60),
-          Wrap(
-            spacing: 32,
-            runSpacing: 32,
-            alignment: WrapAlignment.center,
-            children: [
-              _FeatureCard(
-                icon: Icons.psychology,
-                title: 'Anomaly Detection',
-                description: 'Unsupervised ML identifies unusual clock-in locations and times instantly.',
-                gradientColors: const [Color(0xFF00E5FF), Color(0xFF0088FF)],
-                delay: 200,
-              ),
-              _FeatureCard(
-                icon: Icons.shield,
-                title: 'Fraud Classifier',
-                description: 'XGBoost models score buddy-punching and spoofing risk in real-time.',
-                gradientColors: const [Color(0xFF7C3AED), Color(0xFFD946EF)],
-                delay: 400,
-              ),
-              _FeatureCard(
-                icon: Icons.auto_graph,
-                title: 'LLM Reporting',
-                description: 'Generative AI transforms complex exceptions into plain-English manager briefings.',
-                gradientColors: const [Color(0xFFF59E0B), Color(0xFFEF4444)],
-                delay: 600,
-              ),
-            ],
-          ),
+          Text('Everything your shift-based team needs', textAlign: TextAlign.center, style: theme.textTheme.headlineMedium),
+          const SizedBox(height: 12),
+          Text('One platform from the punch clock to the payroll-ready report.',
+              textAlign: TextAlign.center, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 48),
+          LayoutBuilder(builder: (context, c) {
+            final columns = c.maxWidth >= 900 ? 3 : (c.maxWidth >= 560 ? 2 : 1);
+            const gap = 20.0;
+            final w = (c.maxWidth - gap * (columns - 1)) / columns;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (final (icon, title, body) in _items)
+                  SizedBox(
+                    width: w,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(icon, color: theme.colorScheme.primary, size: 22),
+                            ),
+                            const SizedBox(height: 18),
+                            Text(title, style: theme.textTheme.titleMedium),
+                            const SizedBox(height: 8),
+                            Text(body, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.5)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }),
         ],
       ),
     );
   }
+}
 
-  Widget _buildPricingSection(BuildContext context) {
-    // Simplified for prototype, focusing on premium look
-    return const SizedBox(height: 100);
-  }
+class _HowItWorks extends StatelessWidget {
+  const _HowItWorks();
 
-  Widget _buildFooter(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const steps = [
+      ('1', 'Create your workspace', 'Sign up and your organization is provisioned instantly with you as owner.'),
+      ('2', 'Add sites and staff', 'Draw geofence zones, invite employees by email and assign roles.'),
+      ('3', 'Run your shifts', 'Publish rosters, let staff punch in, and resolve exceptions as they appear.'),
+    ];
     return Container(
-      padding: const EdgeInsets.all(40),
-      child: Center(
-        child: Text(
-          '© 2026 Vigil AI Engine. All rights reserved.',
-          style: GoogleFonts.inter(color: Colors.white24),
+      color: theme.colorScheme.surface,
+      child: _Section(
+        child: Column(
+          children: [
+            Text('Up and running in minutes', textAlign: TextAlign.center, style: theme.textTheme.headlineMedium),
+            const SizedBox(height: 40),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 40,
+              runSpacing: 32,
+              children: [
+                for (final (n, title, body) in steps)
+                  SizedBox(
+                    width: 300,
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: theme.colorScheme.primary,
+                          child: Text(n, style: TextStyle(color: theme.colorScheme.onPrimary, fontWeight: FontWeight.w700)),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(title, style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                        Text(body,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.5)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _FeatureCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-  final List<Color> gradientColors;
-  final int delay;
-
-  const _FeatureCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.gradientColors,
-    required this.delay,
-  });
+class _CallToAction extends StatelessWidget {
+  const _CallToAction();
 
   @override
   Widget build(BuildContext context) {
-    return PremiumCard(
+    final theme = Theme.of(context);
+    return _Section(
       child: Container(
-        width: 320,
-        height: 280,
-        padding: const EdgeInsets.all(32),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: [theme.colorScheme.primary.withValues(alpha: 0.18), theme.colorScheme.secondary.withValues(alpha: 0.08)],
+          ),
+          border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: gradientColors.map((c) => c.withValues(alpha: 0.2)).toList(),
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: gradientColors[0].withValues(alpha: 0.5)),
-              ),
-              child: Icon(icon, color: gradientColors[0], size: 36),
-            ),
-            const Spacer(),
-            Text(
-              title,
-              style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              description,
-              style: GoogleFonts.inter(color: Colors.white60, height: 1.5),
-            ),
+            Text('Ready to bring order to your shifts?', textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 20),
+            FilledButton(onPressed: () => context.go('/register'), child: const Text('Get started free')),
           ],
         ),
       ),
-    ).animate().fadeIn(delay: delay.ms, duration: 800.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutQuad);
+    );
+  }
+}
+
+class _Footer extends StatelessWidget {
+  const _Footer();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: theme.colorScheme.outline))),
+      child: _Section(
+        vertical: 28,
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 12,
+          children: [
+            const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [BrandMark(size: 22), SizedBox(width: 8), Text('Vigil', style: TextStyle(fontWeight: FontWeight.w700))],
+            ),
+            Text('© ${DateTime.now().year} Vigil. All rights reserved.', style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
   }
 }

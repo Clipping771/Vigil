@@ -173,6 +173,8 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
 }
 
 final leaveStateProvider = StateNotifierProvider<LeaveNotifier, LeaveState>((ref) {
+  // Rebuild (and re-subscribe) whenever the signed-in user changes.
+  ref.watch(authProvider.select((s) => s.currentUser?.id));
   return LeaveNotifier(ref);
 });
 

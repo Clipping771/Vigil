@@ -8,13 +8,43 @@ import '../providers/settings_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/attendance_provider.dart';
 
+/// Thrown when a punch is not valid for the employee's current status.
+class ClockStateException implements Exception {
+  final String message;
+  const ClockStateException(this.message);
+  @override
+  String toString() => message;
+}
+
 class ClockService {
   final Ref _ref;
   final _supabase = Supabase.instance.client;
 
   ClockService(this._ref);
 
-  Future<void> simulateClockEvent(
+  /// The rostered shift closest to [now] within a ±12 hour window.
+  Future<Shift?> _findActiveShift(String employeeId, DateTime now) async {
+    final response = await _supabase
+        .from('shifts')
+        .select()
+        .eq('employee_id', employeeId)
+        .gte('end_time', now.toUtc().subtract(const Duration(hours: 12)).toIso8601String())
+        .lte('start_time', now.toUtc().add(const Duration(hours: 12)).toIso8601String())
+        .order('start_time');
+    final shifts = (response as List).map((j) => Shift.fromJson(j)).toList();
+    if (shifts.isEmpty) return null;
+    shifts.sort((a, b) => _distanceToShift(a, now).compareTo(_distanceToShift(b, now)));
+    return shifts.first;
+  }
+
+  static Duration _distanceToShift(Shift s, DateTime now) {
+    if (!now.isBefore(s.startTime) && !now.isAfter(s.endTime)) return Duration.zero;
+    final toStart = s.startTime.difference(now).abs();
+    final toEnd = s.endTime.difference(now).abs();
+    return toStart < toEnd ? toStart : toEnd;
+  }
+
+  Future<void> recordClockEvent(
     String eventType, {
     double? latitude,
     double? longitude,
@@ -22,24 +52,25 @@ class ClockService {
   }) async {
     final user = _ref.read(authProvider).currentUser;
     final settings = _ref.read(settingsProvider);
-    if (user == null) return;
+    if (user == null) throw const ClockStateException('You are signed out. Please sign in again.');
+
+    // Re-read today's state from the server so double taps or a second device
+    // can't record two clock-ins in a row.
+    final attendance = _ref.read(attendanceProvider.notifier);
+    await attendance.loadTodayAttendance();
+    final status = _ref.read(attendanceProvider).status;
+    if (eventType == 'clock_in' && status != ShiftStatus.clockedOut) {
+      throw const ClockStateException('You are already clocked in.');
+    }
+    if (eventType == 'clock_out') {
+      if (status == ShiftStatus.clockedOut) throw const ClockStateException('You are not clocked in.');
+      if (status == ShiftStatus.onBreak) await endBreak();
+    }
 
     final now = DateTime.now();
 
     // 1. Fetch current active shift for user
-    final shiftsResponse = await _supabase
-        .from('shifts')
-        .select()
-        .eq('employee_id', user.id)
-        .gte('end_time', now.toUtc().subtract(const Duration(hours: 12)).toIso8601String())
-        .lte('start_time', now.toUtc().add(const Duration(hours: 12)).toIso8601String())
-        .order('start_time')
-        .limit(1);
-
-    Shift? activeShift;
-    if (shiftsResponse.isNotEmpty) {
-      activeShift = Shift.fromJson(shiftsResponse.first);
-    }
+    final activeShift = await _findActiveShift(user.id, now);
 
     final eventId = const Uuid().v4();
     final clockEvent = ClockEvent(
@@ -102,28 +133,19 @@ class ClockService {
     }
 
     // 6. Refresh attendance state immediately
-    _ref.read(attendanceProvider.notifier).refresh();
+    await _ref.read(attendanceProvider.notifier).loadTodayAttendance();
   }
 
   /// Starts an active break (status becomes onBreak)
   Future<void> startBreak({String breakType = 'meal'}) async {
     final user = _ref.read(authProvider).currentUser;
     if (user == null) return;
+    if (_ref.read(attendanceProvider).status != ShiftStatus.clockedIn) {
+      throw const ClockStateException('Clock in before starting a break.');
+    }
 
     final now = DateTime.now();
-    final shiftsResponse = await _supabase
-        .from('shifts')
-        .select()
-        .eq('employee_id', user.id)
-        .gte('end_time', now.toUtc().subtract(const Duration(hours: 12)).toIso8601String())
-        .lte('start_time', now.toUtc().add(const Duration(hours: 12)).toIso8601String())
-        .order('start_time')
-        .limit(1);
-
-    String? shiftId;
-    if (shiftsResponse.isNotEmpty) {
-      shiftId = shiftsResponse.first['id'];
-    }
+    final shiftId = (await _findActiveShift(user.id, now))?.id;
 
     await _supabase.from('breaks').insert({
       'organization_id': user.organizationId,
@@ -168,21 +190,12 @@ class ClockService {
   Future<void> recordBreak({int durationMinutes = 30, String breakType = 'meal'}) async {
     final user = _ref.read(authProvider).currentUser;
     if (user == null) return;
+    if (_ref.read(attendanceProvider).status == ShiftStatus.clockedOut) {
+      throw const ClockStateException('Clock in before logging a break.');
+    }
 
     final now = DateTime.now();
-    final shiftsResponse = await _supabase
-        .from('shifts')
-        .select()
-        .eq('employee_id', user.id)
-        .gte('end_time', now.toUtc().subtract(const Duration(hours: 12)).toIso8601String())
-        .lte('start_time', now.toUtc().add(const Duration(hours: 12)).toIso8601String())
-        .order('start_time')
-        .limit(1);
-
-    String? shiftId;
-    if (shiftsResponse.isNotEmpty) {
-      shiftId = shiftsResponse.first['id'];
-    }
+    final shiftId = (await _findActiveShift(user.id, now))?.id;
 
     await _supabase.from('breaks').insert({
       'organization_id': user.organizationId,

@@ -10,8 +10,10 @@ import '../providers/attendance_provider.dart';
 import '../providers/geofence_provider.dart';
 import '../providers/roster_provider.dart';
 import '../services/clock_service.dart';
+import '../models/geofence_zone.dart';
 import 'premium_card.dart';
 import 'animated_button.dart';
+import '../theme/ui.dart';
 
 class StaffTerminalView extends ConsumerStatefulWidget {
   const StaffTerminalView({super.key});
@@ -108,26 +110,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
       }
 
       Position position = await Geolocator.getCurrentPosition();
-
-      // Check geofence zones against the scheduled shift's authorized site
-      final geofenceAsync = ref.read(geofenceProvider);
-      final zones = geofenceAsync.value ?? [];
-
-      bool isWithinZone = false;
-      String? matchedZoneName;
-      double? closestDistance;
-
-      for (var zone in zones) {
-        final distance = Geolocator.distanceBetween(position.latitude, position.longitude, zone.latitude, zone.longitude);
-        if (closestDistance == null || distance < closestDistance) {
-          closestDistance = distance;
-        }
-        if (distance <= zone.radiusMeters) {
-          isWithinZone = true;
-          matchedZoneName = zone.name;
-          break;
-        }
-      }
+      final (isWithinZone, matchedZoneName, closestDistance) = await _matchZone(position);
 
       if (!isWithinZone) {
         // Outside authorized geofence radius
@@ -168,6 +151,19 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
     }
   }
 
+  /// Returns whether [position] is inside any of the organization's geofence
+  /// zones, the matched zone name, and the distance to the closest zone.
+  Future<(bool, String?, double?)> _matchZone(Position position) async {
+    final zones = await ref.read(geofenceProvider.future);
+    double? closest;
+    for (final zone in zones) {
+      final distance = Geolocator.distanceBetween(position.latitude, position.longitude, zone.latitude, zone.longitude);
+      if (closest == null || distance < closest) closest = distance;
+      if (distance <= zone.radiusMeters) return (true, zone.name, distance);
+    }
+    return (false, null, closest);
+  }
+
   Future<void> _handleClockOut() async {
     if (_isProcessingAction) return;
     setState(() => _isProcessingAction = true);
@@ -179,10 +175,10 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
 
       try {
         if (await Geolocator.isLocationServiceEnabled()) {
-          final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(timeLimit: Duration(seconds: 4)));
+          final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(timeLimit: Duration(seconds: 8)));
           lat = pos.latitude;
           lng = pos.longitude;
-          isGeofenced = true;
+          isGeofenced = (await _matchZone(pos)).$1;
         }
       } catch (_) {}
 
@@ -205,12 +201,22 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
     required bool isGeofenced,
     required String statusNote,
   }) async {
-    await ref.read(clockServiceProvider).simulateClockEvent(
-      eventType,
-      latitude: lat,
-      longitude: lng,
-      isGeofenced: isGeofenced,
-    );
+    try {
+      await ref.read(clockServiceProvider).recordClockEvent(
+        eventType,
+        latitude: lat,
+        longitude: lng,
+        isGeofenced: isGeofenced,
+      );
+    } on ClockStateException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not record your punch. Check your connection and try again.')));
+      }
+      return;
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -219,7 +225,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
             children: [
               Icon(
                 eventType == 'clock_in' ? Icons.check_circle : Icons.logout,
-                color: Colors.white,
+                color: context.fg(),
               ),
               const SizedBox(width: 12),
               Expanded(child: Text(statusNote, style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -241,7 +247,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
           width: 440,
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: context.surfaceHigh,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.5), width: 2),
             boxShadow: [
@@ -262,13 +268,13 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
               const SizedBox(height: 20),
               Text(
                 'No Roster Scheduled Today',
-                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: context.fg()),
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'You have no scheduled shifts on today\'s roster.\n\nSite geofencing and shift clock-in are only applicable for rostered duties. Please contact your administrator or manager to schedule your shift before clocking in.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.6),
+                style: TextStyle(color: context.fg(0.7), fontSize: 14, height: 1.6),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -306,7 +312,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
           width: 440,
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: context.surfaceHigh,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.5), width: 2),
             boxShadow: [
@@ -327,29 +333,29 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
               const SizedBox(height: 20),
               Text(
                 'Out of Geofence Zone',
-                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: context.fg()),
               ),
               const SizedBox(height: 12),
               Text(
                 'You are currently $distanceText away from the nearest authorized site boundary.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.5),
+                style: TextStyle(color: context.fg(0.7), fontSize: 15, height: 1.5),
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: context.fg().withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
                     Icon(Icons.info_outline, size: 18, color: Colors.amberAccent),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'You can still clock in. A remote punch flag will be submitted for manager approval.',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                        style: TextStyle(color: context.fg(0.7), fontSize: 12),
                       ),
                     ),
                   ],
@@ -361,8 +367,8 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                   Expanded(
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white70,
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                        foregroundColor: context.fg(0.7),
+                        side: BorderSide(color: context.fg().withValues(alpha: 0.2)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -375,7 +381,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                     child: FilledButton(
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.amber.shade700,
-                        foregroundColor: Colors.white,
+                        foregroundColor: context.fg(),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -393,6 +399,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
   }
 
   void _showQRScanner() {
+    var handled = false;
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -410,31 +417,42 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
             child: Stack(
               children: [
                 MobileScanner(
-                  onDetect: (capture) {
-                    final List<Barcode> barcodes = capture.barcodes;
-                    if (barcodes.isNotEmpty) {
-                      Navigator.pop(ctx);
-                      _executeClockEvent(
-                        eventType: 'clock_in',
-                        isGeofenced: true,
-                        statusNote: 'QR Code Verified. Shift started.',
-                      );
+                  onDetect: (capture) async {
+                    if (handled) return;
+                    final raw = capture.barcodes.map((b) => b.rawValue).whereType<String>().firstOrNull;
+                    if (raw == null) return;
+                    handled = true;
+                    Navigator.pop(ctx);
+                    final zones = await ref.read(geofenceProvider.future);
+                    final zone = zones.where((z) => raw == siteQrPayload(z.id)).firstOrNull;
+                    if (zone == null) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('This QR code is not a valid Vigil site code for your organization.')),
+                        );
+                      }
+                      return;
                     }
+                    await _executeClockEvent(
+                      eventType: 'clock_in',
+                      isGeofenced: true,
+                      statusNote: 'Site QR verified at ${zone.name}. Shift started.',
+                    );
                   },
                 ),
                 Positioned(
                   top: 12,
                   right: 12,
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
+                    icon: Icon(Icons.close, color: context.fg()),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ),
-                const Align(
+                Align(
                   alignment: Alignment.bottomCenter,
                   child: Padding(
                     padding: EdgeInsets.all(16.0),
-                    child: Text('Scan Site QR Code to Clock In', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                    child: Text('Scan Site QR Code to Clock In', style: TextStyle(color: context.fg(0.7), fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -482,7 +500,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                                 shape: BoxShape.circle,
                                 color: isClockedIn 
                                     ? const Color(0xFF10B981) 
-                                    : (isOnBreak ? Colors.amberAccent : Colors.white38),
+                                    : (isOnBreak ? Colors.amberAccent : context.fg(0.38)),
                                 boxShadow: [
                                   if (isClockedIn)
                                     BoxShadow(
@@ -504,7 +522,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                                 letterSpacing: 1.2,
                                 color: isClockedIn 
                                     ? const Color(0xFF10B981) 
-                                    : (isOnBreak ? Colors.amberAccent : Colors.white60),
+                                    : (isOnBreak ? Colors.amberAccent : context.fg(0.6)),
                               ),
                             ),
                           ],
@@ -512,13 +530,13 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.06),
+                            color: context.fg().withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            border: Border.all(color: context.fg().withValues(alpha: 0.1)),
                           ),
                           child: Text(
                             DateFormat('EEE, d MMM yyyy').format(DateTime.now()),
-                            style: const TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w500),
+                            style: TextStyle(fontSize: 12, color: context.fg(0.7), fontWeight: FontWeight.w500),
                           ),
                         ),
                       ],
@@ -532,7 +550,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         fontSize: 48,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 2.0,
-                        color: Colors.white,
+                        color: context.fg(),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -543,7 +561,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                       style: TextStyle(
                         color: isClockedIn 
                             ? const Color(0xFF10B981).withValues(alpha: 0.9) 
-                            : (isOnBreak ? Colors.amberAccent : Colors.white54),
+                            : (isOnBreak ? Colors.amberAccent : context.fg(0.54)),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -653,11 +671,11 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                             },
                           ),
                           FilledButton.icon(
-                            icon: const Icon(Icons.logout, color: Colors.white),
+                            icon: Icon(Icons.logout, color: context.fg()),
                             label: const Text('CLOCK OUT', style: TextStyle(fontWeight: FontWeight.bold)),
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.redAccent.shade400,
-                              foregroundColor: Colors.white,
+                              foregroundColor: context.fg(),
                               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
@@ -747,16 +765,16 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                       children: [
                         Text(
                           "Today's Activity Log",
-                          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.fg()),
                         ),
                         Text(
                           '${attendance.todayEvents.length} Punches Recorded',
-                          style: const TextStyle(color: Colors.white54, fontSize: 13),
+                          style: TextStyle(color: context.fg(0.54), fontSize: 13),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Divider(color: Colors.white10),
+                    Divider(color: context.fg(0.1)),
                     const SizedBox(height: 12),
 
                     if (attendance.todayEvents.isEmpty) ...[
@@ -765,9 +783,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         child: Center(
                           child: Column(
                             children: [
-                              Icon(Icons.history, size: 40, color: Colors.white24),
+                              Icon(Icons.history, size: 40, color: context.fg(0.24)),
                               const SizedBox(height: 12),
-                              const Text('No punches recorded yet today.', style: TextStyle(color: Colors.white54)),
+                              Text('No punches recorded yet today.', style: TextStyle(color: context.fg(0.54))),
                             ],
                           ),
                         ),
@@ -777,7 +795,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: attendance.todayEvents.length,
-                        separatorBuilder: (_, _) => const Divider(color: Colors.white10, height: 16),
+                        separatorBuilder: (_, _) => Divider(color: context.fg(0.1), height: 16),
                         itemBuilder: (context, index) {
                           final event = attendance.todayEvents[index];
                           final isClockIn = event.eventType == 'clock_in';
@@ -805,14 +823,14 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                                   children: [
                                     Text(
                                       isClockIn ? 'Shift Clock In' : 'Shift Clock Out',
-                                      style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                                      style: TextStyle(fontWeight: FontWeight.w600, color: context.fg()),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
                                       event.latitude != null 
                                           ? 'GPS: ${event.latitude!.toStringAsFixed(3)}, ${event.longitude!.toStringAsFixed(3)}' 
                                           : (event.isGeofenced ? 'Geofence Verified' : 'Terminal Punch'),
-                                      style: const TextStyle(fontSize: 12, color: Colors.white54),
+                                      style: TextStyle(fontSize: 12, color: context.fg(0.54)),
                                     ),
                                   ],
                                 ),
@@ -820,7 +838,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.05),
+                                  color: context.fg().withValues(alpha: 0.05),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
@@ -828,7 +846,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                                   style: GoogleFonts.firaCode(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
-                                    color: Colors.white,
+                                    color: context.fg(),
                                   ),
                                 ),
                               ),
@@ -856,9 +874,9 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: context.fg().withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: context.fg().withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -867,7 +885,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
             children: [
               Icon(icon, size: 16, color: iconColor),
               const SizedBox(width: 6),
-              Text(title, style: const TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w500)),
+              Text(title, style: TextStyle(color: context.fg(0.54), fontSize: 12, fontWeight: FontWeight.w500)),
             ],
           ),
           const SizedBox(height: 10),
@@ -876,7 +894,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
             style: GoogleFonts.outfit(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: context.fg(),
             ),
           ),
         ],

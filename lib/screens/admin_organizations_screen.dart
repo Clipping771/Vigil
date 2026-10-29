@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
+import '../theme/ui.dart';
 
 class AdminOrganizationsScreen extends ConsumerStatefulWidget {
   const AdminOrganizationsScreen({super.key});
@@ -49,8 +49,8 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F2937),
-              title: const Text('Add Organization', style: TextStyle(color: Colors.white)),
+              backgroundColor: context.surfaceHigh,
+              title: Text('Add Organization', style: TextStyle(color: context.fg())),
               content: SizedBox(
                 width: 400,
                 child: Column(
@@ -58,21 +58,21 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                   children: [
                     TextField(
                       controller: nameController,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: context.fg()),
                       decoration: InputDecoration(
                         labelText: 'Organization Name',
-                        labelStyle: const TextStyle(color: Colors.white70),
+                        labelStyle: TextStyle(color: context.fg(0.7)),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       initialValue: selectedPlan,
-                      dropdownColor: const Color(0xFF1F2937),
-                      style: const TextStyle(color: Colors.white),
+                      dropdownColor: context.surfaceHigh,
+                      style: TextStyle(color: context.fg()),
                       decoration: InputDecoration(
                         labelText: 'Subscription Plan',
-                        labelStyle: const TextStyle(color: Colors.white70),
+                        labelStyle: TextStyle(color: context.fg(0.7)),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       items: const [
@@ -90,7 +90,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
               actions: [
                 TextButton(
                   onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
@@ -100,7 +100,6 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                     
                     try {
                       await _supabase.from('organizations').insert({
-                        'id': const Uuid().v4(),
                         'name': nameController.text.trim(),
                         'subscription_plan': selectedPlan,
                       });
@@ -113,7 +112,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                     }
                   },
                   child: isSaving 
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg()))
                     : const Text('Save Organization'),
                 ),
               ],
@@ -138,8 +137,8 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F2937),
-              title: const Text('Edit Organization', style: TextStyle(color: Colors.white)),
+              backgroundColor: context.surfaceHigh,
+              title: Text('Edit Organization', style: TextStyle(color: context.fg())),
               content: SizedBox(
                 width: 400,
                 child: Column(
@@ -147,21 +146,21 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                   children: [
                     TextField(
                       controller: nameController,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: context.fg()),
                       decoration: InputDecoration(
                         labelText: 'Organization Name',
-                        labelStyle: const TextStyle(color: Colors.white70),
+                        labelStyle: TextStyle(color: context.fg(0.7)),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       initialValue: selectedPlan,
-                      dropdownColor: const Color(0xFF1F2937),
-                      style: const TextStyle(color: Colors.white),
+                      dropdownColor: context.surfaceHigh,
+                      style: TextStyle(color: context.fg()),
                       decoration: InputDecoration(
                         labelText: 'Subscription Plan',
-                        labelStyle: const TextStyle(color: Colors.white70),
+                        labelStyle: TextStyle(color: context.fg(0.7)),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       items: const [
@@ -179,7 +178,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
               actions: [
                 TextButton(
                   onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
@@ -201,7 +200,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                     }
                   },
                   child: isSaving 
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg()))
                     : const Text('Save Changes'),
                 ),
               ],
@@ -239,15 +238,15 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Organizations', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text('Organizations', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: context.fg())),
                   const SizedBox(height: 4),
-                  Text('Manage tenant organizations and billing plans.', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
+                  Text('Manage tenant organizations and billing plans.', style: TextStyle(color: context.fg().withValues(alpha: 0.6))),
                 ],
               ),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
+                  foregroundColor: context.fg(),
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -275,7 +274,7 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                               const Color(0xFF8B5CF6).withValues(alpha: 0.05),
                             ],
                           ),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                          border: Border.all(color: context.fg().withValues(alpha: 0.05)),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
@@ -289,12 +288,12 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                       const SizedBox(height: 24),
                       Text(
                         'No Organizations Yet',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white.withValues(alpha: 0.9)),
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: context.fg().withValues(alpha: 0.9)),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Get started by creating your first tenant organization.',
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 14),
+                        style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 14),
                       ),
                       const SizedBox(height: 32),
                       FilledButton.icon(
@@ -317,9 +316,9 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                 return Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F2937),
+                    color: context.surfaceHigh,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                    border: Border.all(color: context.fg().withValues(alpha: 0.05)),
                     boxShadow: [
                       BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
                     ],
@@ -342,16 +341,16 @@ class _AdminOrganizationsScreenState extends ConsumerState<AdminOrganizationsScr
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(org['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
+                              Text(org['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: context.fg())),
                               const SizedBox(height: 4),
-                              Text('ID: ${org['id']}', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13)),
+                              Text('ID: ${org['id']}', style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 13)),
                             ],
                           ),
                         ),
                         _buildBadge(org['subscription_plan'] ?? 'pro'),
                         const SizedBox(width: 32),
                         IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.white54),
+                          icon: Icon(Icons.edit, color: context.fg(0.54)),
                           onPressed: () => _showEditOrganizationDialog(org),
                         ),
                         IconButton(

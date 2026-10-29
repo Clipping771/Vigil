@@ -5,7 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/premium_card.dart';
 import '../widgets/animated_button.dart';
-import 'package:uuid/uuid.dart';
+import '../theme/ui.dart';
 
 class AdminUsersScreen extends ConsumerStatefulWidget {
   const AdminUsersScreen({super.key});
@@ -64,8 +64,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F2937),
-              title: const Text('Add System User', style: TextStyle(color: Colors.white)),
+              backgroundColor: context.surfaceHigh,
+              title: Text('Add System User', style: TextStyle(color: context.fg())),
               content: SizedBox(
                 width: 400,
                 child: SingleChildScrollView(
@@ -74,31 +74,31 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                     children: [
                       TextField(
                         controller: nameController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Full Name',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: emailController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Email Address',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         initialValue: 'admin',
-                        dropdownColor: const Color(0xFF1F2937),
-                        style: const TextStyle(color: Colors.white),
+                        dropdownColor: context.surfaceHigh,
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Role',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         items: const [
@@ -109,11 +109,11 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         initialValue: selectedOrg,
-                        dropdownColor: const Color(0xFF1F2937),
-                        style: const TextStyle(color: Colors.white),
+                        dropdownColor: context.surfaceHigh,
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Organization',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         items: _organizations.map<DropdownMenuItem<String>>((org) {
@@ -129,15 +129,15 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       const SizedBox(height: 16),
                       TextField(
                         controller: siteController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Site Location (Optional)',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const Text('Note: In this UI prototype, adding a user bypasses auth credential creation. They will appear in the directory but cannot log in without a real Supabase Auth record.', style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontStyle: FontStyle.italic)),
+                      Text('The new admin activates their account from the sign-in page using this email.', style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
                 ),
@@ -145,7 +145,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
               actions: [
                 TextButton(
                   onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
@@ -154,12 +154,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                     setDialogState(() => isSaving = true);
                     
                     try {
-                      // Simulating user creation for prototype
-                      final fakeId = const Uuid().v4();
-                      
                       await _supabase.from('employees').insert({
-                        'id': fakeId,
-                        'email': emailController.text.trim(),
+                        'email': emailController.text.trim().toLowerCase(),
                         'full_name': nameController.text.trim(),
                         'role': 'admin',
                         'organization_id': selectedOrg,
@@ -170,12 +166,12 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                     } catch (e) {
                       setDialogState(() => isSaving = false);
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e'), backgroundColor: Colors.red));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red));
                       }
                     }
                   },
                   child: isSaving 
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg()))
                     : const Text('Add User'),
                 ),
               ],
@@ -208,8 +204,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1F2937),
-              title: const Text('Edit System User', style: TextStyle(color: Colors.white)),
+              backgroundColor: context.surfaceHigh,
+              title: Text('Edit System User', style: TextStyle(color: context.fg())),
               content: SizedBox(
                 width: 400,
                 child: SingleChildScrollView(
@@ -218,32 +214,32 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                     children: [
                       TextField(
                         controller: nameController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Full Name',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: emailController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.fg()),
                         enabled: false, // Cannot edit email in this simplified view without full auth api access
                         decoration: InputDecoration(
                           labelText: 'Email Address (Cannot Edit)',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         initialValue: 'admin',
-                        dropdownColor: const Color(0xFF1F2937),
-                        style: const TextStyle(color: Colors.white),
+                        dropdownColor: context.surfaceHigh,
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Role',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         items: const [
@@ -254,11 +250,11 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         initialValue: selectedOrg,
-                        dropdownColor: const Color(0xFF1F2937),
-                        style: const TextStyle(color: Colors.white),
+                        dropdownColor: context.surfaceHigh,
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Organization',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         items: _organizations.map<DropdownMenuItem<String>>((org) {
@@ -274,10 +270,10 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       const SizedBox(height: 16),
                       TextField(
                         controller: siteController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.fg()),
                         decoration: InputDecoration(
                           labelText: 'Site Location (Optional)',
-                          labelStyle: const TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.fg(0.7)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
@@ -288,7 +284,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
               actions: [
                 TextButton(
                   onPressed: isSaving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                  child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
@@ -313,7 +309,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                     }
                   },
                   child: isSaving 
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg()))
                     : const Text('Save Changes'),
                 ),
               ],
@@ -351,9 +347,9 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('System Users', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text('System Users', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: context.fg())),
                   const SizedBox(height: 4),
-                  Text('Manage employees and global administrators across the platform.', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
+                  Text('Manage employees and global administrators across the platform.', style: TextStyle(color: context.fg().withValues(alpha: 0.6))),
                 ],
               ),
               Row(
@@ -361,7 +357,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF3B82F6),
-                      foregroundColor: Colors.white,
+                      foregroundColor: context.fg(),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -400,7 +396,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                               const Color(0xFF10B981).withValues(alpha: 0.05),
                             ],
                           ),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                          border: Border.all(color: context.fg().withValues(alpha: 0.05)),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
@@ -414,12 +410,12 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       const SizedBox(height: 24),
                       Text(
                         'No System Users Yet',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white.withValues(alpha: 0.9)),
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: context.fg().withValues(alpha: 0.9)),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Click "Add User" to manually create administrators or managers.',
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 14),
+                        style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 14),
                       ),
                     ],
                   ),
@@ -451,16 +447,16 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(user['full_name'], style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
+                              Text(user['full_name'], style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: context.fg())),
                               const SizedBox(height: 4),
-                              Text('${user['email']} • Org: ${user['organization_id'].toString().substring(0,8)}', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13)),
+                              Text('${user['email']} • Org: ${user['organization_id'].toString().substring(0,8)}', style: TextStyle(color: context.fg().withValues(alpha: 0.5), fontSize: 13)),
                             ],
                           ),
                         ),
                         _buildBadge(user['role'] ?? 'staff'),
                         const SizedBox(width: 32),
                         IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.white54),
+                          icon: Icon(Icons.edit, color: context.fg(0.54)),
                           onPressed: () => _showEditUserDialog(user),
                         ),
                         IconButton(

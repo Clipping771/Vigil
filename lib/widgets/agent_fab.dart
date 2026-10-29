@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../theme/ui.dart';
 import '../services/agent_service.dart';
 
 class AgentFAB extends ConsumerStatefulWidget {
@@ -50,7 +51,7 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
       return FloatingActionButton(
         onPressed: _toggleExpanded,
         backgroundColor: const Color(0xFF7C3AED),
-        child: const Icon(Icons.auto_awesome, color: Colors.white),
+        child: Icon(Icons.auto_awesome, color: context.fg()),
       ).animate().scale(curve: Curves.easeOutBack, duration: 400.ms);
     }
 
@@ -77,7 +78,7 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
                 end: Alignment.bottomRight,
               ),
               borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-              border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+              border: Border(bottom: BorderSide(color: context.fg().withValues(alpha: 0.1))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -155,7 +156,7 @@ class _AgentFABState extends ConsumerState<AgentFAB> {
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                    icon: Icon(Icons.send, color: context.fg(), size: 20),
                     onPressed: _submitCommand,
                   ),
                 )

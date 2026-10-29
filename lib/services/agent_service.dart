@@ -57,90 +57,83 @@ class AgentService {
       if (!context.mounted) return 'Action cancelled: the screen was closed.';
       return await _handleAction(data, context);
     } catch (e) {
-      return "Network or parsing error connecting to the agent: $e";
+      debugPrint('Agent error: $e');
+      return "Sorry, I couldn't process that request. Please try again.";
     }
   }
 
   Future<String> _callLLM(String prompt, String systemPrompt) async {
     final settings = _ref.read(settingsProvider);
-    final provider = settings.aiProvider;
-    final model = settings.selectedModel;
-
-    if (provider == 'Gemini') {
-      final apiKey = settings.geminiApiKey;
-      if (apiKey.isEmpty) return '{"action": "error", "payload": "Gemini API key is not configured in settings."}';
-      
-      final actualModel = model ?? 'gemini-1.5-flash';
-      final response = await http.post(
-        Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$actualModel:generateContent?key=$apiKey'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'system_instruction': {
-            'parts': {'text': systemPrompt}
-          },
-          'contents': [
-            {'parts': [{'text': prompt}]}
-          ],
-        }),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['candidates'][0]['content']['parts'][0]['text'];
-      } else {
-        return '{"action": "error", "payload": "Gemini API Error: ${response.body}"}';
-      }
-    } else if (provider == 'ChatGPT') {
-      final apiKey = settings.chatGptApiKey;
-      if (apiKey.isEmpty) return '{"action": "error", "payload": "ChatGPT API key is not configured in settings."}';
-      
-      final actualModel = model ?? 'gpt-3.5-turbo';
-      final response = await http.post(
-        Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $apiKey'},
-        body: jsonEncode({
-          'model': actualModel,
-          'messages': [
-            {'role': 'system', 'content': systemPrompt},
-            {'role': 'user', 'content': prompt}
-          ]
-        }),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'];
-      } else {
-        return '{"action": "error", "payload": "ChatGPT API Error: ${response.body}"}';
-      }
-    } else if (provider == 'Claude') {
-      final apiKey = settings.claudeApiKey;
-      if (apiKey.isEmpty) return '{"action": "error", "payload": "Claude API key is not configured in settings."}';
-      
-      final actualModel = model ?? 'claude-3-haiku-20240307';
-      final response = await http.post(
-        Uri.parse('https://api.anthropic.com/v1/messages'),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: jsonEncode({
-          'model': actualModel,
-          'max_tokens': 1024,
-          'system': systemPrompt,
-          'messages': [
-            {'role': 'user', 'content': prompt}
-          ]
-        }),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['content'][0]['text'];
-      } else {
-        return '{"action": "error", "payload": "Claude API Error: ${response.body}"}';
-      }
+    final apiKey = settings.activeApiKey;
+    final model = settings.activeModel;
+    if (apiKey.isEmpty) {
+      return jsonEncode({'action': 'error', 'payload': 'Add your ${settings.aiProvider} API key in Settings → AI Assistant to use Vigil AI.'});
     }
-    
-    return '{"action": "error", "payload": "Unknown AI Provider."}';
+
+    late final http.Response response;
+    switch (settings.aiProvider) {
+      case 'ChatGPT':
+        response = await http.post(
+          Uri.parse('https://api.openai.com/v1/chat/completions'),
+          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $apiKey'},
+          body: jsonEncode({
+            'model': model,
+            'messages': [
+              {'role': 'system', 'content': systemPrompt},
+              {'role': 'user', 'content': prompt}
+            ]
+          }),
+        );
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body)['choices'][0]['message']['content'];
+        }
+      case 'Claude':
+        response = await http.post(
+          Uri.parse('https://api.anthropic.com/v1/messages'),
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: jsonEncode({
+            'model': model,
+            'max_tokens': 1024,
+            'system': systemPrompt,
+            'messages': [
+              {'role': 'user', 'content': prompt}
+            ]
+          }),
+        );
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body)['content'][0]['text'];
+        }
+      default:
+        response = await http.post(
+          Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent'),
+          headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},
+          body: jsonEncode({
+            'system_instruction': {
+              'parts': {'text': systemPrompt}
+            },
+            'contents': [
+              {'parts': [{'text': prompt}]}
+            ],
+          }),
+        );
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body)['candidates'][0]['content']['parts'][0]['text'];
+        }
+    }
+
+    debugPrint('${settings.aiProvider} API error ${response.statusCode}: ${response.body}');
+    final reason = switch (response.statusCode) {
+      401 || 403 => 'the API key was rejected',
+      404 => 'model "$model" is not available',
+      429 => 'the rate limit was reached',
+      _ => 'the service returned an error (${response.statusCode})',
+    };
+    return jsonEncode({'action': 'error', 'payload': 'Vigil AI could not respond: $reason.'});
   }
 
   Future<String> _handleAction(Map<String, dynamic> data, BuildContext context) async {
@@ -169,6 +162,10 @@ class AgentService {
         return "I didn't understand which theme you wanted.";
       
       case 'navigate':
+        const allowedPaths = {'/dashboard', '/rosters', '/staff', '/leave', '/reports', '/settings', '/geofence'};
+        if (payload is! String || !allowedPaths.contains(payload)) {
+          return "I can't navigate there.";
+        }
         try {
           context.go(payload);
           return "Navigating you to $payload.";

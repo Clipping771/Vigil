@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../theme/ui.dart';
 
 class PremiumCard extends StatelessWidget {
   final Widget child;
@@ -24,7 +25,7 @@ class PremiumCard extends StatelessWidget {
     
     // For dark themes, we want a slight white/primary tint. For light themes, a slight dark/primary tint.
     final baseColor = isDark ? theme.colorScheme.primary : theme.colorScheme.primary;
-    final borderColor = isDark ? Colors.white : Colors.black;
+    final borderColor = isDark ? context.fg() : Colors.black;
 
     return GestureDetector(
       onTap: onTap,

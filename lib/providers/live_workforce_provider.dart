@@ -287,5 +287,7 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
 }
 
 final workforceProvider = StateNotifierProvider<WorkforceNotifier, WorkforceState>((ref) {
+  // Rebuild (and re-subscribe) whenever the signed-in user changes.
+  ref.watch(authProvider.select((s) => s.currentUser?.id));
   return WorkforceNotifier(ref);
 });

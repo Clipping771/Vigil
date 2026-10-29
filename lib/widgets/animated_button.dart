@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/ui.dart';
 
 class AnimatedButton extends StatefulWidget {
   final String text;
@@ -86,18 +87,18 @@ class _AnimatedButtonState extends State<AnimatedButton> with SingleTickerProvid
           ),
           child: Center(
             child: widget.isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     height: 24,
                     width: 24,
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: context.fg(),
                       strokeWidth: 2.5,
                     ),
                   )
                 : Text(
                     widget.text,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.fg(),
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.5,

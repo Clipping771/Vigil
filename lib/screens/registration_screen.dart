@@ -1,25 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
+import '../providers/auth_provider.dart';
+import '../widgets/auth_layout.dart';
 
-class RegistrationScreen extends StatefulWidget {
+/// Self-service sign-up for a new organization. The organization and owner
+/// profile are created server-side by `link_current_user` on first sign-in.
+class RegistrationScreen extends ConsumerStatefulWidget {
   const RegistrationScreen({super.key});
 
   @override
-  State<RegistrationScreen> createState() => _RegistrationScreenState();
+  ConsumerState<RegistrationScreen> createState() => _RegistrationScreenState();
 }
 
-class _RegistrationScreenState extends State<RegistrationScreen> {
+class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
   final _companyController = TextEditingController();
-  
-  bool _isLoading = false;
-  final _supabase = Supabase.instance.client;
+  bool _obscure = true;
+  bool _busy = false;
+  String? _sentTo;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(authProvider.notifier).clearError());
+  }
 
   @override
   void dispose() {
@@ -31,177 +41,132 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     super.dispose();
   }
 
-  void _completeSetup() async {
-    final email = _emailController.text.trim();
-    final name = _nameController.text.trim();
-    final companyName = _companyController.text.trim();
-    final password = _passwordController.text;
-    final confirm = _confirmPasswordController.text;
-    
-    if (email.isEmpty || name.isEmpty || companyName.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields.'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    if (password != confirm) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match.'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _busy = true);
     try {
-      final authResponse = await _supabase.auth.signUp(
-        email: email,
-        password: password,
-        data: {'full_name': name},
-      );
-
-      if (authResponse.user != null) {
-        // Generate new Organization ID using Postgres gen_random_uuid() or dart uuid
-        final orgId = const Uuid().v4();
-
-        // 1. Create the new Organization
-        await _supabase.from('organizations').insert({
-          'id': orgId,
-          'name': companyName,
-          'subscription_plan': 'enterprise' // default to enterprise trial
-        });
-
-        // 2. Insert into employees table as system_admin
-        await _supabase.from('employees').insert({
-          'id': authResponse.user!.id,
-          'email': email,
-          'full_name': name,
-          'role': 'system_admin', // The creator of the org is the system_admin
-          'organization_id': orgId
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Account created successfully! Please log in.'), backgroundColor: Colors.green),
+      final email = _emailController.text.trim();
+      final outcome = await ref.read(authProvider.notifier).signUp(
+            email: email,
+            password: _passwordController.text,
+            fullName: _nameController.text.trim(),
+            companyName: _companyController.text.trim(),
           );
-          context.go('/login');
-        }
+      if (outcome == SignUpOutcome.confirmationRequired && mounted) {
+        setState(() => _sentTo = email);
       }
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: Colors.red));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registration error: $e'), backgroundColor: Colors.red));
+    } on AuthException {
+      // Shown via authProvider.error.
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.primary),
-          onPressed: () => context.go('/login'),
+    final authState = ref.watch(authProvider);
+
+    if (_sentTo != null) {
+      return AuthLayout(
+        title: 'Check your inbox',
+        subtitle: 'One more step to set up your workspace.',
+        form: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FormMessage(
+              'We sent a confirmation link to $_sentTo. Open it to verify your email, then sign in — '
+              'your organization will be created automatically.',
+              isError: false,
+            ),
+            const SizedBox(height: 24),
+            FilledButton(onPressed: () => context.go('/login'), child: const Text('Go to sign in')),
+          ],
         ),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(32.0),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
+      );
+    }
+
+    return AuthLayout(
+      title: 'Create your workspace',
+      subtitle: 'Start a Vigil organization. You\'ll be its owner and can invite your team.',
+      form: Form(
+        key: _formKey,
+        child: AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (authState.error != null) ...[
+                FormMessage(authState.error!),
+                const SizedBox(height: 16),
               ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.how_to_reg, size: 64, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(height: 16),
-                Text(
-                  'Register a New Organization',
-                  style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Create a secure workspace for your company',
-                  style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 14),
-                ),
-                const SizedBox(height: 32),
-                
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name',
-                    prefixIcon: Icon(Icons.person),
-                    border: OutlineInputBorder(),
+              TextFormField(
+                controller: _nameController,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.name],
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Full name', prefixIcon: Icon(Icons.person_outline)),
+                validator: (v) => (v == null || v.trim().length < 2) ? 'Enter your name' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _companyController,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.organizationName],
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Company name', prefixIcon: Icon(Icons.business_outlined)),
+                validator: (v) => (v == null || v.trim().length < 2) ? 'Enter your company name' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                decoration: const InputDecoration(labelText: 'Work email', prefixIcon: Icon(Icons.mail_outline)),
+                validator: validateEmail,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: _obscure,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.newPassword],
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  helperText: 'At least 8 characters, with a letter and a number',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    tooltip: _obscure ? 'Show password' : 'Hide password',
+                    icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscure = !_obscure),
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _companyController,
-                  decoration: const InputDecoration(
-                    labelText: 'Company Name',
-                    prefixIcon: Icon(Icons.business),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Work Email Address',
-                    prefixIcon: Icon(Icons.email),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'New Password',
-                    prefixIcon: Icon(Icons.lock),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _confirmPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm Password',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF10B981)), // Green for success
-                    onPressed: _isLoading ? null : _completeSetup,
-                    child: _isLoading 
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('New Organization? Setup Your Workspace', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
+                validator: validateNewPassword,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: _obscure,
+                autofillHints: const [AutofillHints.newPassword],
+                decoration: const InputDecoration(labelText: 'Confirm password', prefixIcon: Icon(Icons.lock_outline)),
+                validator: (v) => v != _passwordController.text ? 'Passwords do not match' : null,
+                onFieldSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: (_busy || authState.isLoading) ? null : _submit,
+                child: (_busy || authState.isLoading)
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Create workspace'),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Already have an account?'),
+                  TextButton(onPressed: () => context.go('/login'), child: const Text('Sign in')),
+                ],
+              ),
+            ],
           ),
         ),
       ),

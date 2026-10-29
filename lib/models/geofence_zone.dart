@@ -41,3 +41,6 @@ class GeofenceZone {
     };
   }
 }
+
+/// Payload encoded in a site's printable QR code; scanned by the punch clock.
+String siteQrPayload(String zoneId) => 'vigil:site:$zoneId';

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/exception_record.dart';
@@ -7,6 +8,7 @@ import '../models/shift.dart';
 import '../models/leave_request.dart';
 import '../services/exception_engine.dart';
 import 'auth_provider.dart';
+import 'settings_provider.dart';
 
 class ExceptionState {
   final List<ExceptionRecord> allExceptions;
@@ -133,7 +135,7 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
       await _supabase.from('exception_records').update({
         'status': 'resolved',
         'resolved_at': now,
-        'description': ?resolutionNote,
+        'resolution_note': ?resolutionNote,
       }).eq('id', id);
 
       // Optimistic update
@@ -142,7 +144,6 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
             ? ex.copyWith(
                 status: 'resolved',
                 resolvedAt: DateTime.parse(now),
-                description: resolutionNote ?? ex.description,
               )
             : ex;
       }).toList();
@@ -175,7 +176,7 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
     try {
       await _supabase.from('exception_records').update({
         'status': 'ignored',
-        'description': ?reason,
+        'resolution_note': ?reason,
       }).eq('id', id);
 
       final updated = state.allExceptions.map((ex) {
@@ -214,15 +215,19 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
 
     try {
       final now = DateTime.now();
-      final dayStart = DateTime(now.year, now.month, now.day).toUtc().toIso8601String();
+      final todayStartLocal = DateTime(now.year, now.month, now.day);
+      final dayStart = todayStartLocal.toUtc().toIso8601String();
+      final settings = _ref.read(settingsProvider);
 
-      // 1. Fetch today's shifts
+      // 1. Fetch yesterday's and today's shifts (yesterday is needed for rest-gap checks)
       final shiftsRes = await _supabase
           .from('shifts')
           .select()
           .eq('organization_id', orgId)
-          .gte('start_time', dayStart);
-      final shifts = (shiftsRes as List).map((s) => Shift.fromJson(s)).toList();
+          .gte('start_time', todayStartLocal.subtract(const Duration(days: 1)).toUtc().toIso8601String())
+          .lt('start_time', todayStartLocal.add(const Duration(days: 1)).toUtc().toIso8601String());
+      final allShifts = (shiftsRes as List).map((s) => Shift.fromJson(s)).toList();
+      final shifts = allShifts.where((s) => !s.startTime.toLocal().isBefore(todayStartLocal)).toList();
 
       // 2. Fetch today's clock events
       final eventsRes = await _supabase
@@ -244,7 +249,7 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
       final missedClockIns = ExceptionEngine.detectMissedClockIns(
         activeShifts: shifts,
         todayEvents: events,
-        allowedLateMinutes: 15,
+        allowedLateMinutes: settings.allowedLateMinutes,
         organizationId: orgId,
       );
 
@@ -256,7 +261,7 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
 
       final restBreaches = ExceptionEngine.detectRestBreaches(
         upcomingShifts: shifts,
-        pastShifts: shifts,
+        pastShifts: allShifts,
         organizationId: orgId,
       );
 
@@ -268,8 +273,7 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
         final existing = state.allExceptions.any((existing) =>
             existing.employeeId == detected.employeeId &&
             existing.exceptionType == detected.exceptionType &&
-            existing.shiftId == detected.shiftId &&
-            existing.status != 'resolved');
+            existing.shiftId == detected.shiftId);
 
         if (!existing) {
           await _supabase.from('exception_records').insert({
@@ -288,7 +292,8 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
       await fetchExceptions(silent: true);
       return insertedCount;
     } catch (e) {
-      return 0;
+      debugPrint('Compliance scan failed: $e');
+      rethrow;
     }
   }
 
@@ -300,6 +305,8 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
 }
 
 final exceptionStateProvider = StateNotifierProvider<ExceptionNotifier, ExceptionState>((ref) {
+  // Rebuild (and re-subscribe) whenever the signed-in user changes.
+  ref.watch(authProvider.select((s) => s.currentUser?.id));
   return ExceptionNotifier(ref);
 });
 

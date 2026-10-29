@@ -185,28 +185,35 @@ class ExceptionEngine {
   }) {
     List<ExceptionRecord> exceptions = [];
     
-    final allShifts = [...pastShifts, ...upcomingShifts];
-    allShifts.sort((a, b) => a.startTime.compareTo(b.startTime));
+    // Compare consecutive shifts per employee (de-duplicated, since the past
+    // and upcoming lists may overlap); only flag shifts in [upcomingShifts].
+    final upcomingIds = upcomingShifts.map((s) => s.id).toSet();
+    final byEmployee = <String, Map<String, Shift>>{};
+    for (final shift in [...pastShifts, ...upcomingShifts]) {
+      byEmployee.putIfAbsent(shift.employeeId, () => {})[shift.id] = shift;
+    }
 
-    for (int i = 1; i < allShifts.length; i++) {
-      final prevShift = allShifts[i - 1];
-      final currShift = allShifts[i];
+    for (final shiftsById in byEmployee.values) {
+      final shifts = shiftsById.values.toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
+      for (int i = 1; i < shifts.length; i++) {
+        final prevShift = shifts[i - 1];
+        final currShift = shifts[i];
+        if (!upcomingIds.contains(currShift.id)) continue;
 
-      if (prevShift.employeeId == currShift.employeeId) {
         final restDuration = currShift.startTime.difference(prevShift.endTime);
-        
-        if (restDuration.inHours < 10 && restDuration.inHours >= 0) {
-           exceptions.add(ExceptionRecord(
-             id: '',
-             organizationId: organizationId,
-             employeeId: currShift.employeeId,
-             exceptionType: 'fair_work_compliance_breach',
-             severity: 'high',
-             shiftId: currShift.id,
-             status: 'pending',
-             description: 'Fair Work Act Breach: Minimum 10 hour rest period not met between shifts. Only ${restDuration.inHours} hours rest.',
-             createdAt: DateTime.now(),
-           ));
+        if (!restDuration.isNegative && restDuration < const Duration(hours: 10)) {
+          final restHours = (restDuration.inMinutes / 60).toStringAsFixed(1);
+          exceptions.add(ExceptionRecord(
+            id: '',
+            organizationId: organizationId,
+            employeeId: currShift.employeeId,
+            exceptionType: 'fair_work_compliance_breach',
+            severity: 'high',
+            shiftId: currShift.id,
+            status: 'pending',
+            description: 'Minimum 10-hour rest period not met between shifts (only $restHours h).',
+            createdAt: DateTime.now(),
+          ));
         }
       }
     }

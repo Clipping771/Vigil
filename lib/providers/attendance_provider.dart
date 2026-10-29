@@ -18,6 +18,9 @@ class AttendanceState {
   final DateTime? activeBreakStart;
   final Duration completedWorkedDuration;
   final Duration totalBreakDuration;
+
+  /// Completed break time inside the currently open clock-in segment.
+  final Duration currentSegmentBreak;
   final List<ClockEvent> todayEvents;
   final List<Map<String, dynamic>> todayBreaks;
   final bool isLoading;
@@ -29,6 +32,7 @@ class AttendanceState {
     this.activeBreakStart,
     this.completedWorkedDuration = Duration.zero,
     this.totalBreakDuration = Duration.zero,
+    this.currentSegmentBreak = Duration.zero,
     this.todayEvents = const [],
     this.todayBreaks = const [],
     this.isLoading = false,
@@ -38,12 +42,12 @@ class AttendanceState {
   Duration get currentLiveDuration {
     final now = DateTime.now();
     if (status == ShiftStatus.clockedIn && lastClockIn != null) {
-      final ongoing = now.difference(lastClockIn!.toLocal());
+      final ongoing = now.difference(lastClockIn!.toLocal()) - currentSegmentBreak;
       final total = completedWorkedDuration + ongoing;
       return total.isNegative ? Duration.zero : total;
     } else if (status == ShiftStatus.onBreak && lastClockIn != null && activeBreakStart != null) {
       // Frozen at the start of break
-      final ongoingBeforeBreak = activeBreakStart!.toLocal().difference(lastClockIn!.toLocal());
+      final ongoingBeforeBreak = activeBreakStart!.toLocal().difference(lastClockIn!.toLocal()) - currentSegmentBreak;
       final total = completedWorkedDuration + ongoingBeforeBreak;
       return total.isNegative ? Duration.zero : total;
     }
@@ -68,6 +72,7 @@ class AttendanceState {
       activeBreakStart: activeBreakStart ?? this.activeBreakStart,
       completedWorkedDuration: completedWorkedDuration ?? this.completedWorkedDuration,
       totalBreakDuration: totalBreakDuration ?? this.totalBreakDuration,
+      currentSegmentBreak: currentSegmentBreak,
       todayEvents: todayEvents ?? this.todayEvents,
       todayBreaks: todayBreaks ?? this.todayBreaks,
       isLoading: isLoading ?? this.isLoading,
@@ -192,8 +197,18 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         computedStatus = ShiftStatus.clockedOut;
       }
 
-      // Subtract completed breaks from completed duration
-      final netCompletedWorked = completedWorked - Duration(minutes: totalBreakMinutes);
+      // Completed breaks taken during the open segment are subtracted from the
+      // live timer; all other completed breaks come off the closed segments.
+      int currentSegmentBreakMinutes = 0;
+      if (segmentClockIn != null) {
+        for (final b in breaks) {
+          final start = DateTime.tryParse(b['start_time'].toString())?.toLocal();
+          if (b['end_time'] != null && start != null && !start.isBefore(segmentClockIn)) {
+            currentSegmentBreakMinutes += (b['duration_minutes'] as num?)?.toInt() ?? 0;
+          }
+        }
+      }
+      final netCompletedWorked = completedWorked - Duration(minutes: totalBreakMinutes - currentSegmentBreakMinutes);
 
       state = AttendanceState(
         status: computedStatus,
@@ -202,6 +217,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         activeBreakStart: activeBreak,
         completedWorkedDuration: netCompletedWorked.isNegative ? Duration.zero : netCompletedWorked,
         totalBreakDuration: Duration(minutes: totalBreakMinutes),
+        currentSegmentBreak: Duration(minutes: currentSegmentBreakMinutes),
         todayEvents: events.reversed.toList(), // Most recent first for display
         todayBreaks: breaks,
         isLoading: false,
@@ -225,5 +241,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
 }
 
 final attendanceProvider = StateNotifierProvider<AttendanceNotifier, AttendanceState>((ref) {
+  // Rebuild (and re-subscribe) whenever the signed-in user changes.
+  ref.watch(authProvider.select((s) => s.currentUser?.id));
   return AttendanceNotifier(ref);
 });

@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../providers/exception_provider.dart';
 import '../models/exception_record.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/premium_card.dart';
 import '../widgets/animated_button.dart';
-import '../widgets/agent_fab.dart';
-import '../providers/theme_provider.dart';
-import 'dart:ui';
+import '../widgets/app_shell.dart';
 import 'package:intl/intl.dart';
 import '../widgets/staff_terminal_view.dart';
+import '../theme/ui.dart';
 import '../providers/live_workforce_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -32,220 +30,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final activeExceptionsAsync = ref.watch(activeExceptionsProvider);
-    final authState = ref.watch(authProvider);
-    final user = authState.currentUser;
-    final theme = Theme.of(context);
+    final user = ref.watch(authProvider).currentUser;
+    final isManager = user?.isManager ?? false;
+    final showTerminal = !isManager || _activeTab == 1;
+    final compact = MediaQuery.sizeOf(context).width < 700;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: _buildPremiumAppBar(context, user, ref),
-      body: Row(
-        children: [
-          // Glassmorphic Sidebar
-          _buildGlassSidebar(context, user).animate().fadeIn(duration: 400.ms).slideX(begin: -0.1, end: 0),
-          // Main Content Area
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(32.0),
-              child: user?.role == 'staff' 
-                  ? const StaffTerminalView() 
-                  : (_activeTab == 0
-                      ? _buildManagerView(context, ref, activeExceptionsAsync)
-                      : const StaffTerminalView()),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: const AgentFAB(),
-    );
-  }
-
-  PreferredSizeWidget _buildPremiumAppBar(BuildContext context, dynamic user, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return AppBar(
-      backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      title: Row(
-        children: [
-          Icon(Icons.security, color: theme.colorScheme.primary, size: 28)
-            .animate(onPlay: (controller) => controller.repeat(reverse: true))
-            .shimmer(duration: 2000.ms, color: Colors.white),
-          const SizedBox(width: 12),
-          Text(
-            'Vigil',
-            style: GoogleFonts.outfit(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.0,
-              fontSize: 22,
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(left: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
-            ),
-            child: Text(
-              'Enterprise',
-              style: TextStyle(fontSize: 10, color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
-            ),
-          ).animate().fadeIn(delay: 400.ms),
-        ],
-      ),
-      actions: [
-        if (user != null)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.domain, size: 16, color: Colors.white70),
-                const SizedBox(width: 8),
-                Text(
-                  'ORG: ${user.organizationId.substring(0, 5).toUpperCase()}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-              ],
-            ),
-          ).animate().fadeIn(delay: 200.ms),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: Text(
-              '${user?.fullName ?? ''}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ).animate().fadeIn(delay: 300.ms),
-        DropdownButtonHideUnderline(
-          child: DropdownButton<AppTheme>(
-            icon: Icon(Icons.palette, color: theme.colorScheme.primary),
-            dropdownColor: theme.colorScheme.surface,
-            value: ref.watch(themeProvider).currentTheme,
-            items: AppTheme.values.map((AppTheme theme) {
-              return DropdownMenuItem<AppTheme>(
-                value: theme,
-                child: Text(
-                  theme.toString().split('.').last.toUpperCase(),
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              );
-            }).toList(),
-            onChanged: (AppTheme? newTheme) {
-              if (newTheme != null) {
-                ref.read(themeProvider.notifier).setTheme(newTheme);
-              }
-            },
-          ),
-        ).animate().fadeIn(delay: 500.ms),
-        const SizedBox(width: 8),
-        IconButton(
-          icon: Icon(Icons.logout, color: theme.colorScheme.error),
-          tooltip: 'Logout',
-          onPressed: () {
-            ref.read(authProvider.notifier).logout();
-            context.go('/');
-          },
-        ).animate().fadeIn(delay: 600.ms),
-        const SizedBox(width: 16),
-      ],
-    );
-  }
-
-  Widget _buildGlassSidebar(BuildContext context, dynamic user) {
-    final theme = Theme.of(context);
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          width: 260,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withValues(alpha: 0.4),
-            border: Border(right: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 24),
-              _buildNavItem(
-                context, 
-                Icons.dashboard, 
-                'Live Dashboard', 
-                user?.role == 'staff' || _activeTab == 0, 
-                () {
-                  if (mounted) setState(() => _activeTab = 0);
-                },
-              ),
-              if (user?.role != 'staff')
-                _buildNavItem(
-                  context,
-                  Icons.fingerprint,
-                  'My Punch Terminal',
-                  _activeTab == 1,
-                  () {
-                    if (mounted) setState(() => _activeTab = 1);
-                  },
-                ),
-              _buildNavItem(context, Icons.people, 'Staff Directory', false, () => context.go('/staff')),
-              _buildNavItem(context, Icons.calendar_month, 'Rosters & Scheduling', false, () => context.go('/rosters')),
-              _buildNavItem(context, Icons.beach_access, 'Leave Management', false, () => context.go('/leave')),
-              _buildNavItem(context, Icons.location_on, 'Geofence Zones', false, () => context.go('/geofence')),
-              _buildNavItem(context, Icons.bar_chart, 'Compliance Reports', false, () => context.go('/reports')),
-              if (user?.role == 'system_admin') ...[
-                const SizedBox(height: 12),
-                _buildNavItem(context, Icons.admin_panel_settings, 'System Admin', false, () => context.go('/admin'), colorOverride: Colors.orangeAccent),
-              ],
-              const Spacer(),
-              const Divider(color: Colors.white12),
-              _buildNavItem(context, Icons.settings, 'Settings', false, () => context.go('/settings')),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(BuildContext context, IconData icon, String title, bool isSelected, VoidCallback onTap, {Color? colorOverride}) {
-    final theme = Theme.of(context);
-    final color = colorOverride ?? (isSelected ? theme.colorScheme.primary : Colors.white60);
-    
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: isSelected ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)) : null,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 16),
-            Text(
-              title,
-              style: TextStyle(
-                color: color,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+      appBar: AppBar(
+        leading: ShellMenuButton.maybe(context),
+        title: Text(isManager ? 'Dashboard' : 'My Shift'),
+        actions: [
+          if (isManager)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(value: 0, icon: const Icon(Icons.insights_outlined, size: 18), label: compact ? null : const Text('Overview')),
+                  ButtonSegment(value: 1, icon: const Icon(Icons.fingerprint, size: 18), label: compact ? null : const Text('My Punch Clock')),
+                ],
+                selected: {_activeTab},
+                onSelectionChanged: (v) => setState(() => _activeTab = v.first),
               ),
             ),
-          ],
-        ),
+        ],
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(compact ? 16 : 28),
+        child: showTerminal ? const StaffTerminalView() : _buildManagerView(context, ref, activeExceptionsAsync),
       ),
     );
   }
-
-
 
   Widget _buildManagerView(BuildContext context, WidgetRef ref, AsyncValue activeExceptionsAsync) {
     final workforce = ref.watch(workforceProvider);
@@ -273,21 +88,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 36),
 
           // 3. ACTIONABLE EXCEPTIONS SECTION
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.end,
+            spacing: 16,
+            runSpacing: 12,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Actionable Compliance Exceptions',
-                    style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: context.fg()),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Roster breaches, unapproved overtime, geofence, and Fair Work alerts',
-                    style: TextStyle(color: Colors.white60, fontSize: 14),
+                    style: TextStyle(color: context.fg(0.6), fontSize: 14),
                   ),
                 ],
               ),
@@ -327,7 +144,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           if (exceptionState.isLoading && exceptionState.allExceptions.isEmpty)
             const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator()))
           else if (exceptionState.error != null && exceptionState.allExceptions.isEmpty)
-            Center(child: Text('Error loading exceptions: ${exceptionState.error}', style: const TextStyle(color: Colors.white)))
+            Center(child: Text('Error loading exceptions: ${exceptionState.error}', style: TextStyle(color: context.fg())))
           else if (filteredExceptions.isEmpty)
             _buildEmptyState()
           else
@@ -349,8 +166,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildDashboardHeader(AsyncValue activeExceptionsAsync, WorkforceState workforce) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 16,
+      runSpacing: 12,
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,8 +178,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Row(
               children: [
                 Text(
-                  'Workforce Command Center',
-                  style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+                  'Workforce overview',
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(width: 14),
                 Container(
@@ -390,9 +210,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Real-time workforce attendance and compliance monitoring',
-              style: TextStyle(color: Colors.white60),
+              style: TextStyle(color: context.fg(0.6)),
             )
           ],
         ),
@@ -438,50 +258,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _buildWorkforceKpiRow(WorkforceState workforce, AsyncValue activeExceptionsAsync) {
     final pendingCount = activeExceptionsAsync.value?.length ?? 0;
 
-    return Row(
+    return _ResponsiveRow(
       children: [
-        Expanded(
-          child: _buildKpiCard(
+        _buildKpiCard(
             title: 'On Shift Now',
             value: '${workforce.onShiftCount}',
             subtitle: 'Active staff clocked in',
             icon: Icons.badge_outlined,
             iconColor: const Color(0xFF10B981),
             glowColor: const Color(0xFF10B981),
-          ),
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildKpiCard(
+        _buildKpiCard(
             title: 'On Break',
             value: '${workforce.onBreakCount}',
             subtitle: 'Fair work rest/meal',
             icon: Icons.coffee,
             iconColor: Colors.amberAccent,
             glowColor: Colors.amberAccent,
-          ),
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildKpiCard(
+        _buildKpiCard(
             title: 'Actionable Alerts',
             value: '$pendingCount',
             subtitle: 'Roster / geofence flags',
             icon: Icons.warning_amber,
-            iconColor: pendingCount > 0 ? Colors.redAccent : Colors.white54,
+            iconColor: pendingCount > 0 ? Colors.redAccent : context.fg(0.54),
             glowColor: pendingCount > 0 ? Colors.redAccent : Colors.transparent,
-          ),
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildKpiCard(
+        _buildKpiCard(
             title: 'Total Roster',
             value: '${workforce.totalStaffCount}',
             subtitle: 'Registered organization staff',
             icon: Icons.people_outline,
             iconColor: const Color(0xFF3B82F6),
             glowColor: const Color(0xFF3B82F6),
-          ),
         ),
       ],
     );
@@ -498,9 +307,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: context.fg().withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.fg().withValues(alpha: 0.08)),
         boxShadow: [
           if (glowColor != Colors.transparent)
             BoxShadow(color: glowColor.withValues(alpha: 0.08), blurRadius: 20, spreadRadius: -5),
@@ -512,7 +321,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500)),
+              Text(title, style: TextStyle(color: context.fg(0.6), fontSize: 13, fontWeight: FontWeight.w500)),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -526,10 +335,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 12),
           Text(
             value,
-            style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+            style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.bold, color: context.fg()),
           ),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          Text(subtitle, style: TextStyle(color: context.fg(0.38), fontSize: 11)),
         ],
       ),
     );
@@ -562,12 +371,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     children: [
                       Text(
                         "Who's On Duty Right Now",
-                        style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: context.fg()),
                       ),
                       const SizedBox(height: 2),
-                      const Text(
+                      Text(
                         'Live workforce attendance synced across all devices in real time',
-                        style: TextStyle(color: Colors.white54, fontSize: 13),
+                        style: TextStyle(color: context.fg(0.54), fontSize: 13),
                       ),
                     ],
                   ),
@@ -576,30 +385,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: workforce.onShiftCount > 0 ? const Color(0xFF10B981).withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
+                  color: workforce.onShiftCount > 0 ? const Color(0xFF10B981).withValues(alpha: 0.15) : context.fg().withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: workforce.onShiftCount > 0 ? const Color(0xFF10B981).withValues(alpha: 0.4) : Colors.white10),
+                  border: Border.all(color: workforce.onShiftCount > 0 ? const Color(0xFF10B981).withValues(alpha: 0.4) : context.fg(0.1)),
                 ),
                 child: Text(
                   '${workforce.onShiftCount} Active On Shift',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: workforce.onShiftCount > 0 ? const Color(0xFF10B981) : Colors.white60,
+                    color: workforce.onShiftCount > 0 ? const Color(0xFF10B981) : context.fg(0.6),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
-          const Divider(color: Colors.white10),
+          Divider(color: context.fg(0.1)),
           const SizedBox(height: 12),
 
           if (workforce.staffList.isEmpty) ...[
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 32),
               child: Center(
-                child: Text('No employees found in directory.', style: TextStyle(color: Colors.white54)),
+                child: Text('No employees found in directory.', style: TextStyle(color: context.fg(0.54))),
               ),
             ),
           ] else ...[
@@ -607,7 +416,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: workforce.staffList.length,
-              separatorBuilder: (_, _) => const Divider(color: Colors.white10, height: 20),
+              separatorBuilder: (_, _) => Divider(color: context.fg(0.1), height: 20),
               itemBuilder: (context, index) {
                 final staff = workforce.staffList[index];
                 final isClockedIn = staff.status == StaffWorkStatus.clockedIn;
@@ -624,10 +433,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       children: [
                         CircleAvatar(
                           radius: 22,
-                          backgroundColor: Colors.white.withValues(alpha: 0.1),
+                          backgroundColor: context.fg().withValues(alpha: 0.1),
                           child: Text(
                             staff.fullName.isNotEmpty ? staff.fullName[0].toUpperCase() : '?',
-                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: context.fg()),
                           ),
                         ),
                         Positioned(
@@ -640,8 +449,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               shape: BoxShape.circle,
                               color: isClockedIn 
                                   ? const Color(0xFF10B981) 
-                                  : (isOnBreak ? Colors.amberAccent : Colors.white38),
-                              border: Border.all(color: const Color(0xFF1E293B), width: 2),
+                                  : (isOnBreak ? Colors.amberAccent : context.fg(0.38)),
+                              border: Border.all(color: context.surfaceHigh, width: 2),
                             ),
                           ),
                         ),
@@ -659,18 +468,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             children: [
                               Text(
                                 staff.fullName,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: context.fg()),
                               ),
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
+                                  color: context.fg().withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
                                   staff.role.toUpperCase(),
-                                  style: const TextStyle(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.w600),
+                                  style: TextStyle(fontSize: 10, color: context.fg(0.7), fontWeight: FontWeight.w600),
                                 ),
                               ),
                             ],
@@ -678,7 +487,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           const SizedBox(height: 4),
                           Text(
                             '${staff.email} • ${staff.siteLocation}',
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                            style: TextStyle(color: context.fg(0.54), fontSize: 12),
                           ),
                         ],
                       ),
@@ -697,12 +506,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 decoration: BoxDecoration(
                                   color: isClockedIn 
                                       ? const Color(0xFF10B981).withValues(alpha: 0.15) 
-                                      : (isOnBreak ? Colors.amberAccent.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05)),
+                                      : (isOnBreak ? Colors.amberAccent.withValues(alpha: 0.15) : context.fg().withValues(alpha: 0.05)),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
                                     color: isClockedIn 
                                         ? const Color(0xFF10B981).withValues(alpha: 0.4) 
-                                        : (isOnBreak ? Colors.amberAccent.withValues(alpha: 0.4) : Colors.white10),
+                                        : (isOnBreak ? Colors.amberAccent.withValues(alpha: 0.4) : context.fg(0.1)),
                                   ),
                                 ),
                                 child: Text(
@@ -714,7 +523,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     fontWeight: FontWeight.bold,
                                     color: isClockedIn 
                                         ? const Color(0xFF10B981) 
-                                        : (isOnBreak ? Colors.amberAccent : Colors.white54),
+                                        : (isOnBreak ? Colors.amberAccent : context.fg(0.54)),
                                   ),
                                 ),
                               ),
@@ -736,7 +545,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             staff.shiftStartTime != null
                                 ? 'Shift started at ${DateFormat('hh:mm a').format(staff.shiftStartTime!)}'
                                 : 'No active shift today',
-                            style: const TextStyle(fontSize: 11, color: Colors.white38),
+                            style: TextStyle(fontSize: 11, color: context.fg(0.38)),
                           ),
                         ],
                       ),
@@ -762,7 +571,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
-                                  color: staff.isGeofenced ? const Color(0xFF10B981) : Colors.white70,
+                                  color: staff.isGeofenced ? const Color(0xFF10B981) : context.fg(0.7),
                                 ),
                               ),
                             ],
@@ -771,7 +580,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             const SizedBox(height: 2),
                             Text(
                               '${staff.latitude!.toStringAsFixed(2)}, ${staff.longitude!.toStringAsFixed(2)}',
-                              style: GoogleFonts.firaCode(fontSize: 10, color: Colors.white38),
+                              style: GoogleFonts.firaCode(fontSize: 10, color: context.fg(0.38)),
                             ),
                           ],
                         ],
@@ -802,9 +611,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: const Icon(Icons.shield_outlined, size: 80, color: Colors.green),
           ).animate().scale(curve: Curves.easeOutBack, duration: 600.ms),
           const SizedBox(height: 32),
-          Text('100% Compliant', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)).animate().fadeIn(delay: 200.ms),
+          Text('100% Compliant', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: context.fg())).animate().fadeIn(delay: 200.ms),
           const SizedBox(height: 8),
-          const Text('No roster breaches or overtime exceptions detected.', style: TextStyle(color: Colors.white60)).animate().fadeIn(delay: 300.ms),
+          Text('No roster breaches or overtime exceptions detected.', style: TextStyle(color: context.fg(0.6))).animate().fadeIn(delay: 300.ms),
         ],
       ),
     );
@@ -821,10 +630,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.04),
+          color: isSelected ? activeColor.withValues(alpha: 0.18) : context.fg().withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? activeColor : Colors.white.withValues(alpha: 0.08),
+            color: isSelected ? activeColor : context.fg().withValues(alpha: 0.08),
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -833,7 +642,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? activeColor : Colors.white70,
+            color: isSelected ? activeColor : context.fg(0.7),
           ),
         ),
       ),
@@ -848,7 +657,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Row(
             children: [
-              Icon(inserted > 0 ? Icons.warning_amber_rounded : Icons.check_circle, color: Colors.white),
+              Icon(inserted > 0 ? Icons.warning_amber_rounded : Icons.check_circle, color: context.fg()),
               const SizedBox(width: 10),
               Text(
                 inserted > 0
@@ -879,8 +688,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+        backgroundColor: context.surfaceHigh,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: context.fg().withValues(alpha: 0.1))),
         title: Row(
           children: [
             Container(
@@ -889,7 +698,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: const Icon(Icons.verified, color: Color(0xFF10B981), size: 22),
             ),
             const SizedBox(width: 12),
-            Text('Resolve Exception', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text('Resolve Exception', style: GoogleFonts.outfit(color: context.fg(), fontWeight: FontWeight.bold)),
           ],
         ),
         content: SizedBox(
@@ -900,24 +709,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             children: [
               Text(
                 ex is ExceptionRecord ? ex.typeTitle : ex.exceptionType.replaceAll('_', ' ').toUpperCase(),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(color: context.fg(), fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 6),
-              Text('Original Flag: ${ex.description}', style: const TextStyle(color: Colors.white60, fontSize: 13)),
+              Text('Original Flag: ${ex.description}', style: TextStyle(color: context.fg(0.6), fontSize: 13)),
               const SizedBox(height: 16),
-              const Text('Resolution Notes / Manager Sign-off:', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+              Text('Resolution Notes / Manager Sign-off:', style: TextStyle(color: context.fg(0.54), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
               const SizedBox(height: 8),
               TextField(
                 controller: noteController,
                 maxLines: 3,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.fg()),
                 decoration: InputDecoration(
                   hintText: 'e.g. Overtime approved by site manager / Manual break verified...',
-                  hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                  hintStyle: TextStyle(color: context.fg(0.3), fontSize: 12),
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                  fillColor: context.fg().withValues(alpha: 0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.fg().withValues(alpha: 0.1))),
                 ),
               ),
             ],
@@ -926,12 +735,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: Text('Cancel', style: TextStyle(color: context.fg(0.54))),
           ),
           OutlinedButton(
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white60,
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+              foregroundColor: context.fg(0.6),
+              side: BorderSide(color: context.fg().withValues(alpha: 0.2)),
             ),
             onPressed: () async {
               Navigator.pop(ctx);
@@ -1017,7 +826,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         children: [
                           Text(
                             title,
-                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white),
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.fg()),
                           ),
                           const SizedBox(width: 12),
                           Container(
@@ -1038,7 +847,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             decoration: BoxDecoration(
                               color: isResolved 
                                   ? const Color(0xFF10B981).withValues(alpha: 0.15) 
-                                  : (isAcknowledged ? Colors.amber.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.06)),
+                                  : (isAcknowledged ? Colors.amber.withValues(alpha: 0.15) : context.fg().withValues(alpha: 0.06)),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -1046,14 +855,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: isResolved ? const Color(0xFF10B981) : (isAcknowledged ? Colors.amber : Colors.white60),
+                                color: isResolved ? const Color(0xFF10B981) : (isAcknowledged ? Colors.amber : context.fg(0.6)),
                               ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(ex.description ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                      Text(ex.description ?? '', style: TextStyle(color: context.fg(0.7), fontSize: 14)),
                       const SizedBox(height: 12),
                       Row(
                         children: [
@@ -1061,20 +870,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           const SizedBox(width: 6),
                           Text(
                             employeeDisplayName, 
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: context.fg()),
                           ),
                           if (ex is ExceptionRecord && ex.siteLocation != null) ...[
                             const SizedBox(width: 16),
-                            const Icon(Icons.location_on_outlined, size: 14, color: Colors.white38),
+                            Icon(Icons.location_on_outlined, size: 14, color: context.fg(0.38)),
                             const SizedBox(width: 4),
-                            Text(ex.siteLocation!, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                            Text(ex.siteLocation!, style: TextStyle(fontSize: 12, color: context.fg(0.54))),
                           ],
                           const SizedBox(width: 20),
-                          const Icon(Icons.access_time, size: 14, color: Colors.white38),
+                          Icon(Icons.access_time, size: 14, color: context.fg(0.38)),
                           const SizedBox(width: 6),
                           Text(
                             DateFormat('MMM d, hh:mm a').format(ex.createdAt),
-                            style: const TextStyle(fontSize: 12, color: Colors.white54),
+                            style: TextStyle(fontSize: 12, color: context.fg(0.54)),
                           ),
                         ],
                       ),
@@ -1114,7 +923,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           FilledButton.icon(
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(0xFF10B981),
-                              foregroundColor: Colors.white,
+                              foregroundColor: context.fg(),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             ),
@@ -1159,10 +968,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                      border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.3)),
                    ),
                    child: Row(
-                     children: const [
+                     children: [
                        SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF))),
                        SizedBox(width: 16),
-                       Text('Synthesizing historical patterns & anomaly scoring...', style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic)),
+                       Text('Synthesizing historical patterns & anomaly scoring...', style: TextStyle(color: context.fg(0.7), fontStyle: FontStyle.italic)),
                      ],
                    ),
                  ),
@@ -1186,11 +995,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                          children: [
                            const Icon(Icons.auto_awesome, color: Color(0xFF00E5FF), size: 20),
                            const SizedBox(width: 12),
-                           const Text('AI Anomaly Resolution Recommendation', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+                           Text('AI Anomaly Resolution Recommendation', style: TextStyle(fontWeight: FontWeight.bold, color: context.fg(), fontSize: 16)),
                          ],
                        ),
                        const SizedBox(height: 12),
-                       Text(_aiSuggestion!, style: const TextStyle(fontSize: 14, color: Colors.white70, height: 1.5)),
+                       Text(_aiSuggestion!, style: TextStyle(fontSize: 14, color: context.fg(0.7), height: 1.5)),
                        const SizedBox(height: 20),
                        Row(
                          children: [
@@ -1208,7 +1017,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                            const SizedBox(width: 16),
                            TextButton(
                              onPressed: () => setState(() { _resolvingExceptionId = null; _aiSuggestion = null; }),
-                             child: const Text('Discard', style: TextStyle(color: Colors.white54)),
+                             child: Text('Discard', style: TextStyle(color: context.fg(0.54))),
                            )
                          ],
                        )
@@ -1238,3 +1047,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
+
+
+/// Lays children out in equal-width columns that wrap on narrow screens.
+class _ResponsiveRow extends StatelessWidget {
+  final List<Widget> children;
+  const _ResponsiveRow({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      const gap = 16.0;
+      final columns = c.maxWidth >= 1000 ? children.length : (c.maxWidth >= 520 ? 2 : 1);
+      final width = (c.maxWidth - gap * (columns - 1)) / columns;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [for (final child in children) SizedBox(width: width, child: child)],
+      );
+    });
+  }
+}

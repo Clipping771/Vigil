@@ -4,7 +4,7 @@ import '../models/employee.dart';
 import '../providers/auth_provider.dart';
 
 final staffProvider = FutureProvider<List<Employee>>((ref) async {
-  final currentUser = ref.read(authProvider).currentUser;
+  final currentUser = ref.watch(authProvider).currentUser;
   if (currentUser == null) return [];
 
   final supabase = Supabase.instance.client;

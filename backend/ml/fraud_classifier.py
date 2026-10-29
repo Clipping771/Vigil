@@ -4,7 +4,7 @@ import pandas as pd
 class FraudClassifier:
     def __init__(self):
         # XGBoost classifier to score buddy punching and spoofing risk
-        self.model = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+        self.model = xgb.XGBClassifier(eval_metric='logloss')
         self.is_trained = False
 
     def train(self, X_train: pd.DataFrame, y_train: pd.Series):

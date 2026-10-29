@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/auth_layout.dart';
+
+enum _Mode { signIn, activate, reset }
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -13,11 +15,14 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  bool _isSetupMode = false;
-  bool _isProcessingSetup = false;
+  _Mode _mode = _Mode.signIn;
+  bool _obscure = true;
+  bool _busy = false;
+  String? _notice;
 
   @override
   void dispose() {
@@ -27,211 +32,163 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  void _login() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    
-    if (email.isEmpty || password.isEmpty) return;
-
-    // DEV BACKDOOR: Bypass Supabase Auth for prototype testing
-    // Since Supabase IP rate-limited the signup API, we allow a fake admin login
-    if (email == 'admin@admin.com' && password == 'admin') {
-      if (mounted) context.go('/admin');
-      return;
-    }
-
-    // Real Supabase login
-    await ref.read(authProvider.notifier).login(email, password);
-    
-    // Check if mounted and logged in successfully
-    if (mounted) {
-      final authState = ref.read(authProvider);
-      if (authState.currentUser != null) {
-        if (authState.currentUser!.role == 'system_admin') {
-          context.go('/admin');
-        } else {
-          context.go('/dashboard');
-        }
-      } else if (authState.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(authState.error!), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  void _toggleSetupMode() {
+  void _setMode(_Mode mode) {
+    ref.read(authProvider.notifier).clearError();
     setState(() {
-      _isSetupMode = !_isSetupMode;
+      _mode = mode;
+      _notice = null;
       _passwordController.clear();
       _confirmPasswordController.clear();
     });
   }
 
-  Future<void> _handleSetup() async {
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    final confirm = _confirmPasswordController.text.trim();
+    final password = _passwordController.text;
+    final auth = ref.read(authProvider.notifier);
 
-    if (email.isEmpty || password.isEmpty || confirm.isEmpty) return;
-    if (password != confirm) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match'), backgroundColor: Colors.red));
-      return;
-    }
-
-    setState(() => _isProcessingSetup = true);
-
+    setState(() {
+      _busy = true;
+      _notice = null;
+    });
     try {
-      final supabase = Supabase.instance.client;
-      
-      // 1. Check if email exists in directory
-      final employee = await supabase.from('employees').select('id, role').eq('email', email).maybeSingle();
-      
-      if (employee == null) {
-        throw Exception('No provisioned account found for this email. Contact your administrator.');
+      switch (_mode) {
+        case _Mode.signIn:
+          // Navigation happens via the router guard once the profile loads.
+          await auth.login(email, password);
+        case _Mode.activate:
+          final outcome = await auth.signUp(email: email, password: password);
+          if (outcome == SignUpOutcome.confirmationRequired && mounted) {
+            setState(() {
+              _mode = _Mode.signIn;
+              _notice = 'We sent a confirmation link to $email. Open it, then sign in with your new password.';
+            });
+          }
+        case _Mode.reset:
+          await auth.sendPasswordReset(email);
+          if (mounted) {
+            setState(() {
+              _mode = _Mode.signIn;
+              _notice = 'If an account exists for $email, a password reset link is on its way.';
+            });
+          }
       }
-
-      try {
-        // 2. Sign up in Auth
-        final authResponse = await supabase.auth.signUp(email: email, password: password);
-        
-        if (authResponse.user != null) {
-          // 3. Link new Auth ID to the existing Employee record
-          final newAuthId = authResponse.user!.id;
-          await supabase.from('employees').update({'id': newAuthId}).eq('email', email);
-        }
-      } catch (e) {
-        debugPrint('Signup failed (rate limit expected). Bypassing to mock login...');
-        // We ignore the error and proceed to _login(), which will use mock login
-      }
-
-      // 4. Log the user in (if signUp didn't already establish session)
-      await ref.read(authProvider.notifier).login(email, password);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account setup complete!'), backgroundColor: Colors.green));
-        context.go('/dashboard');
-      }
-
+    } on AuthException {
+      // Error is surfaced through authProvider.error.
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
-      }
+      if (mounted) setState(() => _notice = null);
     } finally {
-      if (mounted) setState(() => _isProcessingSetup = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final theme = Theme.of(context);
+    final loading = _busy || authState.isLoading;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.primary),
-          onPressed: () => context.go('/'),
+    final (title, subtitle, cta) = switch (_mode) {
+      _Mode.signIn => ('Welcome back', 'Sign in to your Vigil workspace.', 'Sign in'),
+      _Mode.activate => (
+          'Activate your account',
+          'Your administrator has added you to Vigil. Choose a password to get started.',
+          'Activate account'
         ),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(32.0),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
+      _Mode.reset => ('Reset password', 'Enter your work email and we\'ll send you a reset link.', 'Send reset link'),
+    };
+
+    return AuthLayout(
+      title: title,
+      subtitle: subtitle,
+      form: Form(
+        key: _formKey,
+        child: AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (authState.error != null) ...[
+                FormMessage(authState.error!),
+                const SizedBox(height: 16),
+              ] else if (_notice != null) ...[
+                FormMessage(_notice!, isError: false),
+                const SizedBox(height: 16),
               ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.security, size: 64, color: Theme.of(context).colorScheme.primary),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.email],
+                textInputAction: _mode == _Mode.reset ? TextInputAction.done : TextInputAction.next,
+                decoration: const InputDecoration(labelText: 'Work email', prefixIcon: Icon(Icons.mail_outline)),
+                validator: validateEmail,
+                onFieldSubmitted: _mode == _Mode.reset ? (_) => _submit() : null,
+              ),
+              if (_mode != _Mode.reset) ...[
                 const SizedBox(height: 16),
-                Text(
-                  'Vigil',
-                  style: GoogleFonts.inter(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                Text(
-                  'SecureLock Global',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                TextField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email Address',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    prefixIcon: const Icon(Icons.email),
-                  ),
-                  onSubmitted: (_) => _login(),
-                ),
-                const SizedBox(height: 16),
-                TextField(
+                TextFormField(
                   controller: _passwordController,
-                  obscureText: true,
+                  obscureText: _obscure,
+                  autofillHints: [_mode == _Mode.signIn ? AutofillHints.password : AutofillHints.newPassword],
+                  textInputAction: _mode == _Mode.signIn ? TextInputAction.done : TextInputAction.next,
                   decoration: InputDecoration(
-                    labelText: 'Password',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    prefixIcon: const Icon(Icons.lock),
-                  ),
-                  onSubmitted: (_) => _isSetupMode ? _handleSetup() : _login(),
-                ),
-                if (_isSetupMode) ...[
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _confirmPasswordController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'Confirm Password',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      prefixIcon: const Icon(Icons.lock_clock),
+                    labelText: _mode == _Mode.signIn ? 'Password' : 'New password',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      tooltip: _obscure ? 'Show password' : 'Hide password',
+                      icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                      onPressed: () => setState(() => _obscure = !_obscure),
                     ),
-                    onSubmitted: (_) => _handleSetup(),
                   ),
-                ],
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton(
-                    onPressed: _isSetupMode 
-                        ? (_isProcessingSetup ? null : _handleSetup)
-                        : (authState.isLoading ? null : _login),
-                    child: (_isSetupMode ? _isProcessingSetup : authState.isLoading)
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text(_isSetupMode ? 'COMPLETE SETUP' : 'LOGIN'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _toggleSetupMode,
-                  child: Text(
-                    _isSetupMode 
-                      ? 'Back to Login' 
-                      : 'First time logging in? Set your password',
-                    style: TextStyle(color: Theme.of(context).colorScheme.primary),
-                  ),
+                  validator: _mode == _Mode.signIn
+                      ? (v) => (v == null || v.isEmpty) ? 'Password is required' : null
+                      : validateNewPassword,
+                  onFieldSubmitted: _mode == _Mode.signIn ? (_) => _submit() : null,
                 ),
               ],
-            ),
+              if (_mode == _Mode.activate) ...[
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  obscureText: _obscure,
+                  autofillHints: const [AutofillHints.newPassword],
+                  decoration: const InputDecoration(labelText: 'Confirm password', prefixIcon: Icon(Icons.lock_outline)),
+                  validator: (v) => v != _passwordController.text ? 'Passwords do not match' : null,
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+              ],
+              if (_mode == _Mode.signIn)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(onPressed: () => _setMode(_Mode.reset), child: const Text('Forgot password?')),
+                )
+              else
+                const SizedBox(height: 20),
+              FilledButton(
+                onPressed: loading ? null : _submit,
+                child: loading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(cta),
+              ),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 16),
+              if (_mode == _Mode.signIn) ...[
+                OutlinedButton(
+                  onPressed: () => _setMode(_Mode.activate),
+                  child: const Text('First time here? Activate your account'),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('New organization?', style: theme.textTheme.bodyMedium),
+                    TextButton(onPressed: () => context.go('/register'), child: const Text('Create a workspace')),
+                  ],
+                ),
+              ] else
+                TextButton(onPressed: () => _setMode(_Mode.signIn), child: const Text('Back to sign in')),
+            ],
           ),
         ),
       ),
