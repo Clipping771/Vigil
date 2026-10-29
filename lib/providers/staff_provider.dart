@@ -3,16 +3,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/employee.dart';
 import '../providers/auth_provider.dart';
 
-final staffProvider = FutureProvider<List<Employee>>((ref) async {
-  final currentUser = ref.watch(authProvider).currentUser;
-  if (currentUser == null) return [];
-
-  final supabase = Supabase.instance.client;
-  final response = await supabase
+/// Everyone in the signed-in user's organization, kept live via Realtime.
+final staffProvider = StreamProvider<List<Employee>>((ref) {
+  final orgId = ref.watch(authProvider.select((s) => s.currentUser?.organizationId));
+  if (orgId == null) return Stream.value(const []);
+  return Supabase.instance.client
       .from('employees')
-      .select()
-      .eq('organization_id', currentUser.organizationId)
-      .order('full_name', ascending: true);
-      
-  return response.map((json) => Employee.fromJson(json)).toList();
+      .stream(primaryKey: ['id'])
+      .eq('organization_id', orgId)
+      .order('full_name', ascending: true)
+      .map((rows) => rows.map(Employee.fromJson).toList());
 });

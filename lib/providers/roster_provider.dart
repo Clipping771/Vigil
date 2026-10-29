@@ -4,20 +4,21 @@ import '../models/shift.dart';
 
 import '../providers/auth_provider.dart';
 
-final rosterProvider = FutureProvider<List<Shift>>((ref) async {
-  final currentUser = ref.watch(authProvider).currentUser;
-  if (currentUser == null) return [];
-
-  final supabase = Supabase.instance.client;
-  var query = supabase.from('shifts').select().eq('organization_id', currentUser.organizationId);
-
-  if (!currentUser.isManager) {
-    // Staff only see their own assigned roster shifts
-    query = query.eq('employee_id', currentUser.id);
-  }
-
-  final response = await query.order('start_time', ascending: true);
-  return (response as List).map((json) => Shift.fromJson(json)).toList();
+/// Rostered shifts, kept live via Supabase Realtime. Managers see the whole
+/// organization; staff see only their own shifts.
+final rosterProvider = StreamProvider<List<Shift>>((ref) {
+  final user = ref.watch(authProvider).currentUser;
+  if (user == null) return Stream.value(const []);
+  // Realtime streams accept a single filter, so narrow staff rosters here.
+  return Supabase.instance.client
+      .from('shifts')
+      .stream(primaryKey: ['id'])
+      .eq('organization_id', user.organizationId)
+      .order('start_time', ascending: true)
+      .map((rows) => rows
+          .map(Shift.fromJson)
+          .where((s) => user.isManager || s.employeeId == user.id)
+          .toList());
 });
 
 // A provider that groups shifts by their Date (ignoring time) for the calendar UI
@@ -43,27 +44,19 @@ final shiftsByDayProvider = FutureProvider<Map<DateTime, List<Shift>>>((ref) asy
   return grouped;
 });
 
-// A provider that returns the current employee's scheduled shift for today
+/// The signed-in employee's first rostered shift today (derived from the
+/// live roster, so it updates when a manager adds or removes a shift).
 final todayShiftProvider = FutureProvider<Shift?>((ref) async {
-  final currentUser = ref.watch(authProvider).currentUser;
-  if (currentUser == null) return null;
-
+  final user = ref.watch(authProvider).currentUser;
+  if (user == null) return null;
+  final shifts = await ref.watch(rosterProvider.future);
   final now = DateTime.now();
-  final startOfDay = DateTime(now.year, now.month, now.day).toUtc().toIso8601String();
-  final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59).toUtc().toIso8601String();
-
-  final supabase = Supabase.instance.client;
-  final response = await supabase
-      .from('shifts')
-      .select()
-      .eq('employee_id', currentUser.id)
-      .gte('start_time', startOfDay)
-      .lte('start_time', endOfDay)
-      .order('start_time', ascending: true)
-      .limit(1);
-
-  if ((response as List).isNotEmpty) {
-    return Shift.fromJson(response.first);
-  }
-  return null;
+  final startOfDay = DateTime(now.year, now.month, now.day);
+  final endOfDay = startOfDay.add(const Duration(days: 1));
+  final mine = shifts.where((s) {
+    final start = s.startTime.toLocal();
+    return s.employeeId == user.id && !start.isBefore(startOfDay) && start.isBefore(endOfDay);
+  }).toList()
+    ..sort((a, b) => a.startTime.compareTo(b.startTime));
+  return mine.firstOrNull;
 });

@@ -141,11 +141,11 @@ final previewOverrides = [
   exceptionStateProvider.overrideWith((ref) => _Exceptions(ref)),
   leaveStateProvider.overrideWith((ref) => _Leave(ref)),
   attendanceProvider.overrideWith((ref) => _Attendance(ref)),
-  staffProvider.overrideWith((ref) async => _staff),
-  rosterProvider.overrideWith((ref) async => _shifts),
+  staffProvider.overrideWith((ref) => Stream.value(_staff)),
+  rosterProvider.overrideWith((ref) => Stream.value(_shifts)),
   todayShiftProvider.overrideWith((ref) async => _shifts.first),
-  geofenceProvider.overrideWith((ref) async => [
+  geofenceProvider.overrideWith((ref) => Stream.value([
         GeofenceZone(id: 'z1', organizationId: _org, name: 'Adelaide CBD', latitude: -34.9285, longitude: 138.6007, radiusMeters: 150, createdAt: _today),
         GeofenceZone(id: 'z2', organizationId: _org, name: 'Glenelg', latitude: -34.9800, longitude: 138.5150, radiusMeters: 200, createdAt: _today),
-      ]),
+      ])),
 ];

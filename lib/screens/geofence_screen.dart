@@ -26,7 +26,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
       ],
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add-site',
-        onPressed: _addZone,
+        onPressed: () => _editZone(),
         icon: const Icon(Icons.add_location_alt_outlined),
         label: const Text('Add site'),
       ),
@@ -51,7 +51,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
                     icon: Icons.add_location_alt_outlined,
                     title: 'No work sites yet',
                     message: 'Add your first site so staff can verify their location when clocking in.',
-                    action: FilledButton.icon(onPressed: _addZone, icon: const Icon(Icons.add), label: const Text('Add site')),
+                    action: FilledButton.icon(onPressed: () => _editZone(), icon: const Icon(Icons.add), label: const Text('Add site')),
                   ),
                 )
               : ResponsiveGrid(
@@ -82,8 +82,13 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
                 Expanded(child: Text(z.name, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
                 PopupMenuButton<String>(
                   tooltip: 'More',
-                  onSelected: (v) => v == 'qr' ? _showQr(z) : _deleteZone(z),
+                  onSelected: (v) => switch (v) {
+                    'edit' => _editZone(z),
+                    'qr' => _showQr(z),
+                    _ => _deleteZone(z),
+                  },
                   itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit site'))),
                     PopupMenuItem(value: 'qr', child: ListTile(leading: Icon(Icons.qr_code_2), title: Text('Show site QR code'))),
                     PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete site'))),
                   ],
@@ -159,19 +164,19 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
     if (!ok) return;
     try {
       await Supabase.instance.client.from('geofence_zones').delete().eq('id', z.id);
-      ref.invalidate(geofenceProvider);
       if (mounted) showMessage(context, 'Site deleted.');
     } catch (_) {
       if (mounted) showMessage(context, 'Could not delete the site. You may not have permission.');
     }
   }
 
-  Future<void> _addZone() async {
+  /// Adds a new work site, or edits [existing] when given.
+  Future<void> _editZone([GeofenceZone? existing]) async {
     final formKey = GlobalKey<FormState>();
-    final name = TextEditingController();
-    final lat = TextEditingController();
-    final lng = TextEditingController();
-    final radius = TextEditingController(text: '100');
+    final name = TextEditingController(text: existing?.name);
+    final lat = TextEditingController(text: existing?.latitude.toStringAsFixed(6));
+    final lng = TextEditingController(text: existing?.longitude.toStringAsFixed(6));
+    final radius = TextEditingController(text: existing?.radiusMeters.toStringAsFixed(0) ?? '100');
     var saving = false;
     var locating = false;
 
@@ -186,7 +191,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: const Text('Add work site'),
+          title: Text(existing == null ? 'Add work site' : 'Edit work site'),
           content: SizedBox(
             width: 440,
             child: Form(
@@ -271,24 +276,28 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
                       if (user == null) return;
                       setLocal(() => saving = true);
                       try {
-                        await Supabase.instance.client.from('geofence_zones').insert({
-                          'organization_id': user.organizationId,
+                        final data = {
                           'name': name.text.trim(),
                           'latitude': double.parse(lat.text.trim()),
                           'longitude': double.parse(lng.text.trim()),
                           'radius_meters': double.parse(radius.text.trim()),
-                        });
-                        ref.invalidate(geofenceProvider);
+                        };
+                        final table = Supabase.instance.client.from('geofence_zones');
+                        if (existing == null) {
+                          await table.insert({...data, 'organization_id': user.organizationId});
+                        } else {
+                          await table.update(data).eq('id', existing.id);
+                        }
                         if (dialogCtx.mounted) Navigator.pop(dialogCtx);
-                        if (mounted) showMessage(this.context, 'Site added.');
+                        if (mounted) showMessage(this.context, existing == null ? 'Site added.' : 'Site updated.');
                       } catch (_) {
                         setLocal(() => saving = false);
-                        if (mounted) showMessage(this.context, 'Could not add the site. You may not have permission.');
+                        if (mounted) showMessage(this.context, 'Could not save the site. You may not have permission.');
                       }
                     },
               child: saving
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Add site'),
+                  : Text(existing == null ? 'Add site' : 'Save'),
             ),
           ],
         ),

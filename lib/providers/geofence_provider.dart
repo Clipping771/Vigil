@@ -3,15 +3,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/geofence_zone.dart';
 import 'auth_provider.dart';
 
-final geofenceProvider = FutureProvider<List<GeofenceZone>>((ref) async {
-  final currentUser = ref.watch(authProvider).currentUser;
-  if (currentUser == null) return [];
-  final supabase = Supabase.instance.client;
-  final response = await supabase
+/// The organization's work sites, kept live via Supabase Realtime.
+final geofenceProvider = StreamProvider<List<GeofenceZone>>((ref) {
+  final orgId = ref.watch(authProvider.select((s) => s.currentUser?.organizationId));
+  if (orgId == null) return Stream.value(const []);
+  return Supabase.instance.client
       .from('geofence_zones')
-      .select()
-      .eq('organization_id', currentUser.organizationId)
-      .order('created_at', ascending: false);
-      
-  return response.map((json) => GeofenceZone.fromJson(json)).toList();
+      .stream(primaryKey: ['id'])
+      .eq('organization_id', orgId)
+      .order('created_at', ascending: false)
+      .map((rows) => rows.map(GeofenceZone.fromJson).toList());
 });
