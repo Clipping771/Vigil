@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +26,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool _scanning = false;
   String? _aiFor;
   String? _aiSuggestion;
+  Timer? _autoScan;
+
+  @override
+  void initState() {
+    super.initState();
+    // Managers: look for no-shows and forgotten clock-outs automatically while
+    // the dashboard is open (the server also runs this every 5 minutes).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !(ref.read(authProvider).currentUser?.isManager ?? false)) return;
+      _silentScan();
+      _autoScan = Timer.periodic(const Duration(minutes: 5), (_) => _silentScan());
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoScan?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _silentScan() async {
+    try {
+      await ref.read(exceptionServiceProvider).runComplianceScan();
+    } catch (_) {
+      // Offline or no permission — the manual scan button reports errors.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -483,6 +512,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   static IconData _iconFor(String type) => switch (type) {
         'missed_clock_in' => Icons.alarm_off_outlined,
+        'late_clock_in' => Icons.schedule,
+        'early_departure' => Icons.directions_walk,
+        'missed_clock_out' => Icons.timer_off_outlined,
         'excessive_overtime' => Icons.more_time,
         'roster_breach' => Icons.event_busy_outlined,
         'geofence_violation' => Icons.location_off_outlined,

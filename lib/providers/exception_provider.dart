@@ -225,7 +225,6 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
     try {
       final now = DateTime.now();
       final todayStartLocal = DateTime(now.year, now.month, now.day);
-      final dayStart = todayStartLocal.toUtc().toIso8601String();
       final settings = _ref.read(settingsProvider);
 
       // 1. Fetch yesterday's and today's shifts (yesterday is needed for rest-gap checks)
@@ -238,12 +237,12 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
       final allShifts = (shiftsRes as List).map((s) => Shift.fromJson(s)).toList();
       final shifts = allShifts.where((s) => !s.startTime.toLocal().isBefore(todayStartLocal)).toList();
 
-      // 2. Fetch today's clock events
+      // 2. Fetch clock events since yesterday (covers overnight shifts)
       final eventsRes = await _supabase
           .from('clock_events')
           .select()
           .eq('organization_id', orgId)
-          .gte('event_time', dayStart);
+          .gte('event_time', todayStartLocal.subtract(const Duration(days: 1)).toUtc().toIso8601String());
       final events = (eventsRes as List).map((e) => ClockEvent.fromJson(e)).toList();
 
       // 3. Fetch active leaves
@@ -255,10 +254,11 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
       final leaves = (leavesRes as List).map((l) => LeaveRequest.fromJson(l)).toList();
 
       // 4. Run detection engines
-      final missedClockIns = ExceptionEngine.detectMissedClockIns(
-        activeShifts: shifts,
-        todayEvents: events,
-        allowedLateMinutes: settings.allowedLateMinutes,
+      final missedPunches = ExceptionEngine.detectMissedPunches(
+        shifts: allShifts.where((s) => s.startTime.isBefore(now)).toList(),
+        events: events,
+        graceMinutes: settings.allowedLateMinutes,
+        overtimeMinutes: settings.allowedOvertimeMinutes,
         organizationId: orgId,
       );
 
@@ -274,7 +274,7 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
         organizationId: orgId,
       );
 
-      final allDetected = [...missedClockIns, ...leaveConflicts, ...restBreaches];
+      final allDetected = [...missedPunches, ...leaveConflicts, ...restBreaches];
       int insertedCount = 0;
 
       for (var detected in allDetected) {

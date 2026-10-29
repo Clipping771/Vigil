@@ -45,28 +45,20 @@ class ExceptionRecord {
 
   String get formattedType => exceptionType.replaceAll('_', ' ').toUpperCase();
 
-  String get typeTitle {
-    switch (exceptionType.toLowerCase()) {
-      case 'missed_clock_in':
-        return 'Missed Clock-In';
-      case 'excessive_overtime':
-        return 'Excessive Unapproved Overtime';
-      case 'roster_breach':
-        return 'Unscheduled Roster Breach';
-      case 'geofence_violation':
-        return 'Geofence Boundary Violation';
-      case 'fair_work_compliance_breach':
-        return 'Fair Work Act Rest/Break Breach';
-      case 'leave_roster_conflict':
-        return 'Leave & Roster Scheduling Conflict';
-      case 'statistical_anomaly':
-        return 'AI Statistical Anomaly Detected';
-      case 'fraud_risk':
-        return 'Suspected Ghost Punch / Fraud Risk';
-      default:
-        return formattedType;
-    }
-  }
+  String get typeTitle => switch (exceptionType.toLowerCase()) {
+        'missed_clock_in' => 'Missed clock-in',
+        'late_clock_in' => 'Late clock-in',
+        'early_departure' => 'Left early',
+        'missed_clock_out' => 'Missed clock-out',
+        'excessive_overtime' => 'Unapproved overtime',
+        'roster_breach' => 'Worked without a rostered shift',
+        'geofence_violation' => 'Outside work site',
+        'fair_work_compliance_breach' => 'Fair Work break or rest breach',
+        'leave_roster_conflict' => 'Rostered during leave',
+        'statistical_anomaly' => 'Unusual punch pattern',
+        'fraud_risk' => 'Possible buddy punching',
+        _ => formattedType,
+      };
 
   factory ExceptionRecord.fromJson(Map<String, dynamic> json) {
     final empData = json['employees'] is Map<String, dynamic>

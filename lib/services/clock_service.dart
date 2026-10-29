@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/clock_event.dart';
 import '../models/shift.dart';
+import '../models/exception_record.dart';
 import 'exception_engine.dart';
 import '../providers/settings_provider.dart';
 import '../providers/auth_provider.dart';
@@ -66,6 +68,10 @@ class ClockService {
       if (status == ShiftStatus.clockedOut) throw const ClockStateException('You are not clocked in.');
       if (status == ShiftStatus.onBreak) await endBreak();
     }
+    // Start of the open segment and breaks inside it, for clock-out rules.
+    final segment = _ref.read(attendanceProvider);
+    final segmentStart = eventType == 'clock_out' ? segment.lastClockIn : null;
+    final segmentBreak = eventType == 'clock_out' ? segment.currentSegmentBreak : Duration.zero;
 
     final now = DateTime.now();
 
@@ -97,43 +103,68 @@ class ClockService {
       'is_geofenced': isGeofenced,
     });
 
-    // 3. Process exception if out-of-boundary geofence (only applicable if a shift is rostered)
+    // 3. Compliance rules for this punch.
+    final found = <ExceptionRecord>[];
     if (!isGeofenced && latitude != null && longitude != null && activeShift != null) {
-      await _supabase.from('exception_records').insert({
-        'organization_id': user.organizationId,
-        'employee_id': user.id,
-        'exception_type': 'geofence_violation',
-        'severity': 'high',
-        'shift_id': activeShift.id,
-        'status': 'pending',
-        'description': 'Clock-$eventType registered outside authorized geofence boundary for shift at ${activeShift.siteLocation}.',
-      });
+      found.add(ExceptionRecord(
+        id: '',
+        organizationId: user.organizationId,
+        employeeId: user.id,
+        exceptionType: 'geofence_violation',
+        severity: 'high',
+        shiftId: activeShift.id,
+        status: 'pending',
+        description: '${eventType == 'clock_in' ? 'Clocked in' : 'Clocked out'} outside the ${activeShift.siteLocation} work site.',
+        createdAt: now,
+      ));
     }
-
-    // 4. Run through Exception Engine
-    final exception = await ExceptionEngine.processClockEvent(
+    found.addAll(ExceptionEngine.evaluatePunch(
       event: clockEvent,
-      scheduledShift: activeShift,
-      allowedLateMinutes: settings.allowedLateMinutes,
-      allowedOvertimeMinutes: settings.allowedOvertimeMinutes,
+      shift: activeShift,
+      graceMinutes: settings.allowedLateMinutes,
+      overtimeMinutes: settings.allowedOvertimeMinutes,
       organizationId: user.organizationId,
-    );
+      clockInTime: segmentStart,
+      breakTaken: segmentBreak,
+    ));
 
-    // 5. Insert exception if detected
-    if (exception != null) {
-      await _supabase.from('exception_records').insert({
-        'organization_id': exception.organizationId,
-        'employee_id': exception.employeeId,
-        'exception_type': exception.exceptionType,
-        'severity': exception.severity,
-        'shift_id': exception.shiftId,
-        'status': exception.status,
-        'description': exception.description,
-      });
-    }
+    // 4. Store them (a punch must never fail because of this step).
+    await raiseExceptions(found);
 
     // 6. Refresh attendance state immediately
     await _ref.read(attendanceProvider.notifier).loadTodayAttendance();
+  }
+
+  /// Inserts [records], skipping any type already raised for the same shift
+  /// (or, without a shift, for the same employee today).
+  Future<void> raiseExceptions(List<ExceptionRecord> records) async {
+    for (final r in records) {
+      try {
+        var existing = _supabase
+            .from('exception_records')
+            .select('id')
+            .eq('employee_id', r.employeeId)
+            .eq('exception_type', r.exceptionType);
+        if (r.shiftId != null) {
+          existing = existing.eq('shift_id', r.shiftId!);
+        } else {
+          final now = DateTime.now();
+          existing = existing.gte('created_at', DateTime(now.year, now.month, now.day).toUtc().toIso8601String());
+        }
+        if ((await existing.limit(1) as List).isNotEmpty) continue;
+        await _supabase.from('exception_records').insert({
+          'organization_id': r.organizationId,
+          'employee_id': r.employeeId,
+          'exception_type': r.exceptionType,
+          'severity': r.severity,
+          'shift_id': r.shiftId,
+          'status': 'pending',
+          'description': r.description,
+        });
+      } catch (e) {
+        debugPrint('Could not record ${r.exceptionType}: $e');
+      }
+    }
   }
 
   /// Starts an active break (status becomes onBreak)
