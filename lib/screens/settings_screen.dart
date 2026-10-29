@@ -5,6 +5,8 @@ import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/ui_kit.dart';
+import '../services/agent_service.dart';
 import '../widgets/agent_fab.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -134,6 +136,7 @@ class _AppearanceSection extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: SegmentedButton<AppTheme>(
+          showSelectedIcon: false,
           segments: [
             for (final t in AppTheme.values) ButtonSegment(value: t, icon: Icon(t.icon), label: Text(t.label)),
           ],
@@ -216,83 +219,157 @@ class _AiSection extends ConsumerStatefulWidget {
 
 class _AiSectionState extends ConsumerState<_AiSection> {
   bool _obscure = true;
+  bool _testing = false;
+  (bool ok, String message)? _result;
+
+  static const _labels = {'Gemini': 'Gemini', 'ChatGPT': 'OpenAI', 'Claude': 'Claude', 'Ollama': 'Ollama'};
+
+  Future<void> _test() async {
+    setState(() {
+      _testing = true;
+      _result = null;
+    });
+    try {
+      final msg = await ref.read(agentServiceProvider).testConnection();
+      if (mounted) setState(() => _result = (true, msg));
+    } catch (e) {
+      if (mounted) setState(() => _result = (false, e is AgentUnavailable ? e.message : 'Connection failed: $e'));
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
+  Future<void> _loadModels() async {
+    setState(() => _result = null);
+    try {
+      await ref.read(settingsProvider.notifier).fetchModels();
+    } catch (e) {
+      if (mounted) setState(() => _result = (false, e.toString().replaceFirst('Exception: ', '')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
     final theme = Theme.of(context);
+    final isOllama = settings.aiProvider == 'Ollama';
+    final label = _labels[settings.aiProvider] ?? settings.aiProvider;
 
     return _Section(
       title: 'AI assistant',
-      subtitle: 'Bring your own API key. It is stored only on this device and sent directly to the provider.',
+      subtitle: isOllama
+          ? 'Runs on your own computer with Ollama — free, private, no API key.'
+          : 'Bring your own API key. It is stored only on this device and sent directly to the provider.',
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'Gemini', label: Text('Gemini')),
-                ButtonSegment(value: 'ChatGPT', label: Text('OpenAI')),
-                ButtonSegment(value: 'Claude', label: Text('Claude')),
-              ],
-              selected: {settings.aiProvider},
-              onSelectionChanged: (s) => notifier.updateAiProvider(s.first),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: [
+                  for (final e in _labels.entries)
+                    ButtonSegment(
+                      value: e.key,
+                      label: Text(e.value),
+                      icon: e.key == 'Ollama' ? const Icon(Icons.computer_outlined, size: 18) : null,
+                    ),
+                ],
+                selected: {settings.aiProvider},
+                onSelectionChanged: (s) {
+                  setState(() => _result = null);
+                  notifier.updateAiProvider(s.first);
+                },
+              ),
             ),
             const SizedBox(height: 20),
-            TextFormField(
-              key: ValueKey('key-${settings.aiProvider}'),
-              initialValue: settings.activeApiKey,
-              obscureText: _obscure,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                labelText: '${settings.aiProvider == 'ChatGPT' ? 'OpenAI' : settings.aiProvider} API key',
-                prefixIcon: const Icon(Icons.key_outlined),
-                suffixIcon: IconButton(
-                  tooltip: _obscure ? 'Show key' : 'Hide key',
-                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                  onPressed: () => setState(() => _obscure = !_obscure),
+            if (isOllama) ...[
+              TextFormField(
+                key: const ValueKey('ollama-url'),
+                initialValue: settings.ollamaBaseUrl,
+                autocorrect: false,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: 'Ollama server URL',
+                  prefixIcon: Icon(Icons.dns_outlined),
+                  helperText: 'Default: $defaultOllamaUrl',
                 ),
+                onChanged: notifier.updateOllamaUrl,
               ),
-              onChanged: notifier.updateApiKey,
-            ),
+              const SizedBox(height: 12),
+              const InfoBanner(
+                'Install Ollama from ollama.com, then run "ollama pull llama3.2". '
+                'To use it from the website, start Ollama with OLLAMA_ORIGINS set to this site address (or *).',
+                icon: Icons.lightbulb_outline,
+              ),
+            ] else
+              TextFormField(
+                key: ValueKey('key-${settings.aiProvider}'),
+                initialValue: settings.activeApiKey,
+                obscureText: _obscure,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: '$label API key',
+                  prefixIcon: const Icon(Icons.key_outlined),
+                  suffixIcon: IconButton(
+                    tooltip: _obscure ? 'Show key' : 'Hide key',
+                    icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                ),
+                onChanged: (v) {
+                  setState(() => _result = null);
+                  notifier.updateApiKey(v);
+                },
+              ),
             const SizedBox(height: 16),
+            if (settings.availableModels.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                key: ValueKey('${settings.aiProvider}|${settings.availableModels.length}'),
+                initialValue: settings.availableModels.contains(settings.selectedModel) ? settings.selectedModel : null,
+                isExpanded: true,
+                hint: Text('Default: ${defaultAiModels[settings.aiProvider]}'),
+                decoration: const InputDecoration(labelText: 'Model'),
+                items: [for (final m in settings.availableModels) DropdownMenuItem(value: m, child: Text(m))],
+                onChanged: (m) {
+                  setState(() => _result = null);
+                  notifier.updateSelectedModel(m);
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
             Wrap(
               spacing: 12,
               runSpacing: 12,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                ElevatedButton.icon(
-                  onPressed: settings.isFetchingModels
-                      ? null
-                      : () async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          try {
-                            await notifier.fetchModels();
-                          } catch (e) {
-                            messenger.showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
-                          }
-                        },
+                FilledButton.icon(
+                  onPressed: _testing ? null : _test,
+                  icon: _testing
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.network_check, size: 18),
+                  label: Text(_testing ? 'Testing…' : 'Test connection'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: settings.isFetchingModels ? null : _loadModels,
                   icon: settings.isFetchingModels
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.sync, size: 18),
-                  label: const Text('Load models'),
+                  label: Text(isOllama ? 'Load installed models' : 'Load models'),
                 ),
-                Text('Using: ${settings.activeModel}', style: theme.textTheme.bodySmall),
+                Text('Model: ${settings.activeModel}', style: theme.textTheme.bodySmall),
               ],
             ),
-            if (settings.availableModels.isNotEmpty) ...[
+            if (_result != null) ...[
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                key: ValueKey('${settings.aiProvider}|${settings.availableModels.length}'),
-                initialValue: settings.availableModels.contains(settings.selectedModel) ? settings.selectedModel : null,
-                isExpanded: true,
-                hint: const Text('Choose a model'),
-                decoration: const InputDecoration(labelText: 'Model'),
-                items: [for (final m in settings.availableModels) DropdownMenuItem(value: m, child: Text(m))],
-                onChanged: notifier.updateSelectedModel,
+              InfoBanner(
+                _result!.$2,
+                tone: _result!.$1 ? Tone.success : Tone.danger,
+                icon: _result!.$1 ? Icons.check_circle_outline : Icons.error_outline,
               ),
             ],
           ],

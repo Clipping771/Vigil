@@ -166,6 +166,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             Text('FREQUENCY', style: theme.textTheme.labelSmall),
             const SizedBox(height: 8),
             SegmentedButton<String>(
+              showSelectedIcon: false,
               segments: const [
                 ButtonSegment(value: 'Daily', label: Text('Daily')),
                 ButtonSegment(value: 'Weekly', label: Text('Weekly')),

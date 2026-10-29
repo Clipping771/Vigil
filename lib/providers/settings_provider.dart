@@ -11,7 +11,11 @@ const defaultAiModels = {
   'Gemini': 'gemini-2.5-flash',
   'ChatGPT': 'gpt-4o-mini',
   'Claude': 'claude-haiku-5-5',
+  'Ollama': 'llama3.2',
 };
+
+/// Where a local Ollama server listens by default.
+const defaultOllamaUrl = 'http://localhost:11434';
 
 const _claudeFallbackModels = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
 
@@ -29,6 +33,7 @@ class AppSettings {
   final String geminiApiKey;
   final String chatGptApiKey;
   final String claudeApiKey;
+  final String ollamaBaseUrl;
   final String? selectedModel;
   final List<String> availableModels;
   final bool isFetchingModels;
@@ -44,6 +49,7 @@ class AppSettings {
     this.geminiApiKey = '',
     this.chatGptApiKey = '',
     this.claudeApiKey = '',
+    this.ollamaBaseUrl = defaultOllamaUrl,
     this.selectedModel,
     this.availableModels = const [],
     this.isFetchingModels = false,
@@ -52,8 +58,15 @@ class AppSettings {
   String get activeApiKey => switch (aiProvider) {
         'ChatGPT' => chatGptApiKey,
         'Claude' => claudeApiKey,
+        'Ollama' => '',
         _ => geminiApiKey,
       };
+
+  /// Ollama runs locally and needs no API key.
+  bool get needsApiKey => aiProvider != 'Ollama';
+
+  /// Base URL without a trailing slash.
+  String get ollamaUrl => ollamaBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
 
   String get activeModel => selectedModel ?? defaultAiModels[aiProvider]!;
 
@@ -68,6 +81,7 @@ class AppSettings {
     String? geminiApiKey,
     String? chatGptApiKey,
     String? claudeApiKey,
+    String? ollamaBaseUrl,
     String? Function()? selectedModel,
     List<String>? availableModels,
     bool? isFetchingModels,
@@ -83,6 +97,7 @@ class AppSettings {
       geminiApiKey: geminiApiKey ?? this.geminiApiKey,
       chatGptApiKey: chatGptApiKey ?? this.chatGptApiKey,
       claudeApiKey: claudeApiKey ?? this.claudeApiKey,
+      ollamaBaseUrl: ollamaBaseUrl ?? this.ollamaBaseUrl,
       selectedModel: selectedModel != null ? selectedModel() : this.selectedModel,
       availableModels: availableModels ?? this.availableModels,
       isFetchingModels: isFetchingModels ?? this.isFetchingModels,
@@ -101,6 +116,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   static const _kProvider = 'ai_provider';
   static const _kModel = 'ai_model';
+  static const _kOllamaUrl = 'ollama_url';
   static String _keyFor(String provider) => 'ai_key_${provider.toLowerCase()}';
 
   Future<void> _loadLocal() async {
@@ -112,6 +128,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         geminiApiKey: prefs.getString(_keyFor('Gemini')) ?? '',
         chatGptApiKey: prefs.getString(_keyFor('ChatGPT')) ?? '',
         claudeApiKey: prefs.getString(_keyFor('Claude')) ?? '',
+        ollamaBaseUrl: prefs.getString(_kOllamaUrl) ?? defaultOllamaUrl,
         selectedModel: () => prefs.getString(_kModel),
       );
     } catch (e) {
@@ -185,6 +202,14 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kProvider, provider);
     await prefs.remove(_kModel);
+    // Ollama has no fixed default model: discover what is installed.
+    if (provider == 'Ollama') {
+      try {
+        await fetchModels();
+      } catch (_) {
+        // Surfaced when the user tests the connection.
+      }
+    }
   }
 
   Future<void> updateApiKey(String key) async {
@@ -196,6 +221,13 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     };
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyFor(state.aiProvider), trimmed);
+  }
+
+  Future<void> updateOllamaUrl(String url) async {
+    final value = url.trim().isEmpty ? defaultOllamaUrl : url.trim();
+    state = state.copyWith(ollamaBaseUrl: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kOllamaUrl, value);
   }
 
   Future<void> updateSelectedModel(String? model) async {
@@ -213,9 +245,20 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     state = state.copyWith(isFetchingModels: true, availableModels: []);
     try {
       final apiKey = state.activeApiKey;
-      if (apiKey.isEmpty) throw Exception('Enter an API key first');
+      if (state.needsApiKey && apiKey.isEmpty) throw Exception('Enter an API key first');
       List<String> models;
       switch (state.aiProvider) {
+        case 'Ollama':
+          final http.Response response;
+          try {
+            response = await http.get(Uri.parse('${state.ollamaUrl}/api/tags')).timeout(const Duration(seconds: 8));
+          } catch (_) {
+            throw Exception(ollamaUnreachableMessage(state.ollamaUrl));
+          }
+          if (response.statusCode != 200) throw Exception('Ollama responded with ${response.statusCode}');
+          final data = jsonDecode(response.body);
+          models = ((data['models'] as List?) ?? []).map((m) => m['name'].toString()).toList()..sort();
+          if (models.isEmpty) throw Exception('Ollama has no models yet. Run: ollama pull llama3.2');
         case 'Gemini':
           final response = await http.get(
             Uri.parse('https://generativelanguage.googleapis.com/v1beta/models'),
@@ -255,6 +298,10 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
           }
       }
       state = state.copyWith(availableModels: models);
+      // Ollama: pick an installed model if none (or a missing one) is selected.
+      if (state.aiProvider == 'Ollama' && !models.contains(state.selectedModel) && models.isNotEmpty) {
+        await updateSelectedModel(models.first);
+      }
     } finally {
       state = state.copyWith(isFetchingModels: false);
     }
@@ -265,3 +312,8 @@ final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((r
   final orgId = ref.watch(authProvider.select((s) => s.currentUser?.organizationId));
   return SettingsNotifier(orgId);
 });
+
+/// Explains the usual reasons a browser cannot reach a local Ollama server.
+String ollamaUnreachableMessage(String url) =>
+    'Could not reach Ollama at $url. Make sure Ollama is running'
+    '${kIsWeb ? ' and allows this site: set OLLAMA_ORIGINS=${Uri.base.origin} (or *) and restart Ollama' : ''}.';

@@ -62,6 +62,9 @@ class AgentService {
       final data = jsonDecode(cleanJson);
       if (!context.mounted) return 'Action cancelled: the screen was closed.';
       return await _handleAction(data, context);
+    } on http.ClientException catch (e) {
+      debugPrint('Agent network error: $e');
+      return "Couldn't reach the AI service. Check your connection and try again.";
     } catch (e) {
       debugPrint('Agent error: $e');
       return "Sorry, I couldn't process that request. Please try again.";
@@ -94,16 +97,71 @@ class AgentService {
     return text;
   }
 
+  /// Sends a tiny prompt to the configured provider and model. Returns a
+  /// success message with the round-trip time, or throws [AgentUnavailable].
+  Future<String> testConnection() async {
+    var settings = _ref.read(settingsProvider);
+    if (settings.aiProvider == 'Ollama' && settings.selectedModel == null) {
+      try {
+        await _ref.read(settingsProvider.notifier).fetchModels();
+      } catch (e) {
+        throw AgentUnavailable(e.toString().replaceFirst('Exception: ', ''));
+      }
+      settings = _ref.read(settingsProvider);
+    }
+    final watch = Stopwatch()..start();
+    final String text;
+    try {
+      text = (await _callLLM('Reply with the single word OK.', 'You are a connectivity check. Answer in one word.')).trim();
+    } on http.ClientException {
+      throw const AgentUnavailable("Couldn't reach the AI service. Check your internet connection.");
+    }
+    watch.stop();
+    if (text.startsWith('{')) {
+      try {
+        final data = jsonDecode(text);
+        if (data is Map && data['action'] == 'error') throw AgentUnavailable(data['payload'].toString());
+      } on FormatException {
+        // Not our error envelope.
+      }
+    }
+    if (text.isEmpty) throw const AgentUnavailable('The model returned an empty reply.');
+    final secs = (watch.elapsedMilliseconds / 1000).toStringAsFixed(1);
+    return 'Connected to ${settings.aiProvider == 'ChatGPT' ? 'OpenAI' : settings.aiProvider} · ${settings.activeModel} replied in ${secs}s.';
+  }
+
   Future<String> _callLLM(String prompt, String systemPrompt) async {
     final settings = _ref.read(settingsProvider);
     final apiKey = settings.activeApiKey;
     final model = settings.activeModel;
-    if (apiKey.isEmpty) {
+    if (settings.needsApiKey && apiKey.isEmpty) {
       return jsonEncode({'action': 'error', 'payload': 'Add your ${settings.aiProvider} API key in Settings → AI Assistant to use Vigil AI.'});
     }
 
     late final http.Response response;
     switch (settings.aiProvider) {
+      case 'Ollama':
+        try {
+          response = await http
+              .post(
+                Uri.parse('${settings.ollamaUrl}/api/chat'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({
+                  'model': model,
+                  'stream': false,
+                  'messages': [
+                    {'role': 'system', 'content': systemPrompt},
+                    {'role': 'user', 'content': prompt}
+                  ],
+                }),
+              )
+              .timeout(const Duration(seconds: 120));
+        } catch (_) {
+          return jsonEncode({'action': 'error', 'payload': ollamaUnreachableMessage(settings.ollamaUrl)});
+        }
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body)['message']['content'];
+        }
       case 'ChatGPT':
         response = await http.post(
           Uri.parse('https://api.openai.com/v1/chat/completions'),
@@ -161,7 +219,9 @@ class AgentService {
     debugPrint('${settings.aiProvider} API error ${response.statusCode}: ${response.body}');
     final reason = switch (response.statusCode) {
       401 || 403 => 'the API key was rejected',
-      404 => 'model "$model" is not available',
+      404 => settings.aiProvider == 'Ollama'
+          ? 'model "$model" is not installed (run: ollama pull $model)'
+          : 'model "$model" is not available',
       429 => 'the rate limit was reached',
       _ => 'the service returned an error (${response.statusCode})',
     };
