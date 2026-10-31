@@ -20,7 +20,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
-  final _companyController = TextEditingController();
+  final _companyController = TextEditingController(text: 'SecureLock Global');
   bool _obscure = true;
   bool _busy = false;
   String? _sentTo;
@@ -86,8 +86,8 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
     }
 
     return AuthLayout(
-      title: 'Create your workspace',
-      subtitle: 'Start a Vigil organization. You\'ll be its owner and can invite your team.',
+      title: 'Setup SecureLock Workspace',
+      subtitle: 'Initialize the SecureLock Global workforce attendance and compliance workspace.',
       form: Form(
         key: _formKey,
         child: AutofillGroup(

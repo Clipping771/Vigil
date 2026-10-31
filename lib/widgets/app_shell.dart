@@ -120,12 +120,42 @@ class _Sidebar extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 20, 16),
+            padding: const EdgeInsets.fromLTRB(20, 20, 16, 16),
             child: Row(
               children: [
                 const BrandMark(size: 32),
                 const SizedBox(width: 12),
-                Text('Vigil', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Text('Vigil', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: scheme.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text('PORTAL', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: scheme.primary)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'SecureLock Global',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -230,7 +260,17 @@ class _UserMenu extends ConsumerWidget {
       itemBuilder: (context) => [
         PopupMenuItem(
           enabled: false,
-          child: Text(user.email, style: theme.textTheme.bodySmall),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(user.fullName, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text(user.email, style: theme.textTheme.bodySmall),
+              const SizedBox(height: 2),
+              Text('SecureLock Global · ${user.siteLocation ?? "Oakleigh Facility"}',
+                  style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w500)),
+            ],
+          ),
         ),
         const PopupMenuDivider(),
         PopupMenuItem(

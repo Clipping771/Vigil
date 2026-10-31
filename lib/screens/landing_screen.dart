@@ -46,18 +46,39 @@ class _NavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 600;
+    final theme = Theme.of(context);
     return _Section(
       vertical: 20,
       child: Row(
         children: [
           const BrandMark(size: 32),
           const SizedBox(width: 10),
-          const Text('Vigil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          Row(
+            children: [
+              const Text('Vigil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              if (!compact) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text('SecureLock Global',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.primary,
+                      )),
+                ),
+              ],
+            ],
+          ),
           const Spacer(),
           TextButton(onPressed: () => context.go('/login'), child: const Text('Sign in')),
           if (!compact) ...[
             const SizedBox(width: 8),
-            FilledButton(onPressed: () => context.go('/register'), child: const Text('Get started')),
+            FilledButton(onPressed: () => context.go('/register'), child: const Text('Workspace setup')),
           ],
         ],
       ),
@@ -72,25 +93,25 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final width = MediaQuery.sizeOf(context).width;
-    final headlineSize = width < 600 ? 36.0 : (width < 1000 ? 48.0 : 60.0);
+    final headlineSize = width < 600 ? 34.0 : (width < 1000 ? 46.0 : 56.0);
 
     return _Section(
-      vertical: width < 600 ? 40 : 88,
+      vertical: width < 600 ? 40 : 80,
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
               color: theme.colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(999),
               border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
             ),
-            child: Text('Attendance · Rostering · Compliance',
+            child: Text('SecureLock Global · Workforce Attendance & Compliance',
                 style: TextStyle(color: theme.colorScheme.primary, fontSize: 13, fontWeight: FontWeight.w600)),
           ),
           const SizedBox(height: 28),
           Text(
-            'Know who\'s on shift.\nCatch compliance issues early.',
+            'Automated Attendance.\nFair Work Compliance Early.',
             textAlign: TextAlign.center,
             style: theme.textTheme.displaySmall?.copyWith(
               fontSize: headlineSize,
@@ -101,10 +122,11 @@ class _Hero extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
+            constraints: const BoxConstraints(maxWidth: 680),
             child: Text(
-              'Vigil gives frontline teams a geofenced punch clock and gives managers a live view of attendance, '
-              'rosters, leave and Fair Work exceptions — all in one secure, multi-tenant workspace.',
+              'Designed for SecureLock Global\'s Oakleigh manufacturing and distribution network. '
+              'Vigil replaces manual, unscheduled attendance compilation with automated, role-based reporting, '
+              'geofenced frontline clocking, and real-time Fair Work Act 2009 exception detection before payroll reconciliation.',
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -120,15 +142,16 @@ class _Hero extends StatelessWidget {
             runSpacing: 12,
             children: [
               FilledButton.icon(
-                onPressed: () => context.go('/register'),
-                icon: const Icon(Icons.arrow_forward, size: 18),
-                label: const Text('Create your workspace'),
+                onPressed: () => context.go('/login'),
+                icon: const Icon(Icons.login, size: 18),
+                label: const Text('Sign in to portal'),
                 style: FilledButton.styleFrom(minimumSize: const Size(0, 50), padding: const EdgeInsets.symmetric(horizontal: 24)),
               ),
-              OutlinedButton(
-                onPressed: () => context.go('/login'),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/register'),
+                icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+                label: const Text('Workspace admin setup'),
                 style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50), padding: const EdgeInsets.symmetric(horizontal: 24)),
-                child: const Text('Sign in to your team'),
               ),
             ],
           ),
@@ -217,16 +240,16 @@ class _HowItWorks extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const steps = [
-      ('1', 'Create your workspace', 'Sign up and your organization is provisioned instantly with you as owner.'),
-      ('2', 'Add sites and staff', 'Draw geofence zones, invite employees by email and assign roles.'),
-      ('3', 'Run your shifts', 'Publish rosters, let staff punch in, and resolve exceptions as they appear.'),
+      ('1', 'Oakleigh Sites & Rosters', 'Define work sites and manufacturing shifts with Fair Work compliance parameters.'),
+      ('2', 'Frontline GPS & QR Clocking', 'Site-based staff verify attendance via mobile punch clock and QR scans within geofenced boundaries.'),
+      ('3', 'Automated Exception Resolution', 'Managers review flagged rest breaches, overtime, and missed shifts with human-readable explanations before payroll.'),
     ];
     return Container(
       color: theme.colorScheme.surface,
       child: _Section(
         child: Column(
           children: [
-            Text('Up and running in minutes', textAlign: TextAlign.center, style: theme.textTheme.headlineMedium),
+            Text('Streamlined Shift & Compliance Flow', textAlign: TextAlign.center, style: theme.textTheme.headlineMedium),
             const SizedBox(height: 40),
             Wrap(
               alignment: WrapAlignment.center,
@@ -280,9 +303,19 @@ class _CallToAction extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text('Ready to bring order to your shifts?', textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 20),
-            FilledButton(onPressed: () => context.go('/register'), child: const Text('Get started free')),
+            Text('Ready to access the workforce portal?', textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            Text(
+              'SecureLock Global workforce attendance, exception detection and Fair Work compliance.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () => context.go('/login'),
+              icon: const Icon(Icons.login),
+              label: const Text('Sign in to portal'),
+            ),
           ],
         ),
       ),
@@ -308,9 +341,13 @@ class _Footer extends StatelessWidget {
           children: [
             const Row(
               mainAxisSize: MainAxisSize.min,
-              children: [BrandMark(size: 22), SizedBox(width: 8), Text('Vigil', style: TextStyle(fontWeight: FontWeight.w700))],
+              children: [
+                BrandMark(size: 22),
+                SizedBox(width: 8),
+                Text('Vigil', style: TextStyle(fontWeight: FontWeight.w700)),
+              ],
             ),
-            Text('© ${DateTime.now().year} Vigil. All rights reserved.', style: theme.textTheme.bodySmall),
+            Text('© ${DateTime.now().year} SecureLock Global', style: theme.textTheme.bodySmall),
           ],
         ),
       ),

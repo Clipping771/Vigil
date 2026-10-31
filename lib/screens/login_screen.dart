@@ -90,13 +90,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final loading = _busy || authState.isLoading;
 
     final (title, subtitle, cta) = switch (_mode) {
-      _Mode.signIn => ('Welcome back', 'Sign in to your Vigil workspace.', 'Sign in'),
+      _Mode.signIn => ('SecureLock Global', 'Sign in to the Vigil workforce and compliance portal.', 'Sign in'),
       _Mode.activate => (
-          'Activate your account',
-          'Your administrator has added you to Vigil. Choose a password to get started.',
+          'Activate Employee Account',
+          'Your manager or HR has provisioned your account. Choose a password to get started.',
           'Activate account'
         ),
-      _Mode.reset => ('Reset password', 'Enter your work email and we\'ll send you a reset link.', 'Send reset link'),
+      _Mode.reset => ('Reset password', 'Enter your work email to receive a password reset link.', 'Send reset link'),
     };
 
     return AuthLayout(
@@ -182,8 +182,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('New organization?', style: theme.textTheme.bodyMedium),
-                    TextButton(onPressed: () => context.go('/register'), child: const Text('Create a workspace')),
+                    Text('Workspace administrator?', style: theme.textTheme.bodyMedium),
+                    TextButton(onPressed: () => context.go('/register'), child: const Text('Setup organization')),
                   ],
                 ),
               ] else

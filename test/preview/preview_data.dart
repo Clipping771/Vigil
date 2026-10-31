@@ -24,7 +24,7 @@ final _today = DateTime(_now.year, _now.month, _now.day);
 Employee _emp(String id, String name, String role, [String? site]) => Employee(
       id: id,
       organizationId: _org,
-      email: '${name.split(' ').first.toLowerCase()}@acme.test',
+      email: '${name.split(' ').first.toLowerCase()}@securelock.com',
       fullName: name,
       role: id == 'e1' ? previewRole : role,
       siteLocation: site,
@@ -32,12 +32,12 @@ Employee _emp(String id, String name, String role, [String? site]) => Employee(
     );
 
 final _staff = [
-  _emp('e1', 'Olivia Owner', 'owner', 'Head Office'),
-  _emp('e2', 'Max Manager', 'manager', 'Adelaide CBD'),
-  _emp('e3', 'Sam Staff', 'staff', 'Adelaide CBD'),
-  _emp('e4', 'Priya Patel', 'staff', 'Glenelg'),
-  _emp('e5', 'Liam Nguyen', 'staff', 'Glenelg'),
-  _emp('e6', 'Hana Ito', 'hr', 'Head Office'),
+  _emp('e1', 'Alice Smith', 'owner', 'Oakleigh HQ & Plant'),
+  _emp('e2', 'Carol White', 'manager', 'Oakleigh HQ & Plant'),
+  _emp('e3', 'Bob Jones', 'staff', 'Oakleigh HQ & Plant'),
+  _emp('e4', 'Priya Patel', 'staff', 'Melbourne Distribution'),
+  _emp('e5', 'Liam Nguyen', 'staff', 'Melbourne Distribution'),
+  _emp('e6', 'Hana Ito', 'hr', 'Oakleigh HQ & Plant'),
 ];
 
 Shift _shift(String id, String emp, int startH, int endH, String site, [int dayOffset = 0]) => Shift(
@@ -51,12 +51,12 @@ Shift _shift(String id, String emp, int startH, int endH, String site, [int dayO
     );
 
 final _shifts = [
-  _shift('s1', 'e3', 7, 15, 'Adelaide CBD'),
-  _shift('s2', 'e4', 9, 17, 'Glenelg'),
-  _shift('s3', 'e5', 12, 20, 'Glenelg'),
-  _shift('s4', 'e1', 9, 17, 'Head Office'),
-  _shift('s5', 'e3', 7, 15, 'Adelaide CBD', 1),
-  _shift('s6', 'e4', 9, 17, 'Glenelg', 2),
+  _shift('s1', 'e3', 7, 15, 'Oakleigh HQ & Plant'),
+  _shift('s2', 'e4', 9, 17, 'Melbourne Distribution'),
+  _shift('s3', 'e5', 12, 20, 'Melbourne Distribution'),
+  _shift('s4', 'e1', 9, 17, 'Oakleigh HQ & Plant'),
+  _shift('s5', 'e3', 7, 15, 'Oakleigh HQ & Plant', 1),
+  _shift('s6', 'e4', 9, 17, 'Melbourne Distribution', 2),
 ];
 
 class _Auth extends AuthNotifier {
@@ -70,18 +70,18 @@ class _Workforce extends WorkforceNotifier {
     state = WorkforceState(
       employeeNames: {for (final e in _staff) e.id: e.fullName},
       staffList: [
-        StaffLiveAttendance(employeeId: 'e3', fullName: 'Sam Staff', email: 'sam@acme.test', role: 'staff',
-            siteLocation: 'Adelaide CBD', status: StaffWorkStatus.clockedIn,
+        StaffLiveAttendance(employeeId: 'e3', fullName: 'Bob Jones', email: 'bob@securelock.com', role: 'staff',
+            siteLocation: 'Oakleigh HQ & Plant', status: StaffWorkStatus.clockedIn,
             shiftStartTime: _today.add(const Duration(hours: 7, minutes: 2)), isGeofenced: true,
             lastEventTime: _today.add(const Duration(hours: 7, minutes: 2))),
-        StaffLiveAttendance(employeeId: 'e4', fullName: 'Priya Patel', email: 'priya@acme.test', role: 'staff',
-            siteLocation: 'Glenelg', status: StaffWorkStatus.onBreak,
+        StaffLiveAttendance(employeeId: 'e4', fullName: 'Priya Patel', email: 'priya@securelock.com', role: 'staff',
+            siteLocation: 'Melbourne Distribution', status: StaffWorkStatus.onBreak,
             shiftStartTime: _today.add(const Duration(hours: 9)), breakStartTime: _now.subtract(const Duration(minutes: 12)),
             isGeofenced: true, lastEventTime: _today.add(const Duration(hours: 9))),
-        StaffLiveAttendance(employeeId: 'e5', fullName: 'Liam Nguyen', email: 'liam@acme.test', role: 'staff',
-            siteLocation: 'Glenelg', status: StaffWorkStatus.clockedOut),
-        StaffLiveAttendance(employeeId: 'e2', fullName: 'Max Manager', email: 'max@acme.test', role: 'manager',
-            siteLocation: 'Adelaide CBD', status: StaffWorkStatus.clockedOut),
+        StaffLiveAttendance(employeeId: 'e5', fullName: 'Liam Nguyen', email: 'liam@securelock.com', role: 'staff',
+            siteLocation: 'Melbourne Distribution', status: StaffWorkStatus.clockedOut),
+        StaffLiveAttendance(employeeId: 'e2', fullName: 'Carol White', email: 'carol@securelock.com', role: 'manager',
+            siteLocation: 'Oakleigh HQ & Plant', status: StaffWorkStatus.clockedOut),
       ],
     );
   }
@@ -94,12 +94,12 @@ class _Exceptions extends ExceptionNotifier {
     ExceptionRecord ex(String id, String emp, String name, String type, String sev, String status, String desc, int minsAgo) =>
         ExceptionRecord(id: id, organizationId: _org, employeeId: emp, employeeName: name, exceptionType: type,
             severity: sev, status: status, description: desc, createdAt: _now.subtract(Duration(minutes: minsAgo)),
-            siteLocation: 'Glenelg');
+            siteLocation: 'Oakleigh HQ & Plant');
     state = ExceptionState(allExceptions: [
-      ex('x1', 'e5', 'Liam Nguyen', 'missed_clock_in', 'high', 'pending', 'Employee missed clock-in by more than 15 minutes.', 25),
-      ex('x2', 'e3', 'Sam Staff', 'geofence_violation', 'high', 'pending', 'Clock-in registered 420 m outside the Adelaide CBD site.', 300),
+      ex('x1', 'e5', 'Liam Nguyen', 'missed_clock_in', 'high', 'pending', 'Employee missed clock-in by more than 15 minutes at Melbourne Distribution.', 25),
+      ex('x2', 'e3', 'Bob Jones', 'geofence_violation', 'high', 'pending', 'Clock-in registered 420 m outside the Oakleigh HQ & Plant zone.', 300),
       ex('x3', 'e4', 'Priya Patel', 'fair_work_compliance_breach', 'medium', 'acknowledged', 'Minimum 10-hour rest period not met between shifts (only 8.5 h).', 900),
-      ex('x4', 'e3', 'Sam Staff', 'excessive_overtime', 'low', 'resolved', 'Clocked out 40 minutes after rostered end.', 3000),
+      ex('x4', 'e3', 'Bob Jones', 'excessive_overtime', 'low', 'resolved', 'Clocked out 40 minutes after rostered end without pre-approval.', 3000),
     ]);
   }
   @override
@@ -112,10 +112,10 @@ class _Leave extends LeaveNotifier {
         id: id, organizationId: _org, employeeId: emp, employeeName: name, leaveType: type,
         startDate: _today.add(Duration(days: from)), endDate: _today.add(Duration(days: to)), status: status, reason: reason);
     state = LeaveState(requests: [
-      lr('l1', 'e4', 'Priya Patel', 'annual', 2, 4, 'pending', 'Family trip to Melbourne'),
-      lr('l2', 'e3', 'Sam Staff', 'sick', -3, -2, 'approved', 'Flu, medical certificate provided'),
-      lr('l3', 'e1', 'Olivia Owner', 'annual', 20, 27, 'pending', 'Annual holiday'),
-      lr('l4', 'e5', 'Liam Nguyen', 'unpaid', 10, 10, 'declined', 'Concert'),
+      lr('l1', 'e4', 'Priya Patel', 'annual', 2, 4, 'pending', 'Family trip to Sydney'),
+      lr('l2', 'e3', 'Bob Jones', 'sick', -3, -2, 'approved', 'Medical certificate provided'),
+      lr('l3', 'e1', 'Alice Smith', 'annual', 20, 27, 'pending', 'Annual leave'),
+      lr('l4', 'e5', 'Liam Nguyen', 'unpaid', 10, 10, 'declined', 'Personal commitment'),
     ]);
   }
   @override
@@ -145,7 +145,8 @@ final previewOverrides = [
   rosterProvider.overrideWith((ref) => Stream.value(_shifts)),
   todayShiftProvider.overrideWith((ref) async => _shifts.first),
   geofenceProvider.overrideWith((ref) => Stream.value([
-        GeofenceZone(id: 'z1', organizationId: _org, name: 'Adelaide CBD', latitude: -34.9285, longitude: 138.6007, radiusMeters: 150, createdAt: _today),
-        GeofenceZone(id: 'z2', organizationId: _org, name: 'Glenelg', latitude: -34.9800, longitude: 138.5150, radiusMeters: 200, createdAt: _today),
+        GeofenceZone(id: 'z1', organizationId: _org, name: 'Oakleigh HQ & Plant', latitude: -37.8988, longitude: 145.0915, radiusMeters: 250, createdAt: _today),
+        GeofenceZone(id: 'z2', organizationId: _org, name: 'Melbourne Distribution', latitude: -37.8136, longitude: 144.9631, radiusMeters: 200, createdAt: _today),
+        GeofenceZone(id: 'z3', organizationId: _org, name: 'Sydney Branch', latitude: -33.8688, longitude: 151.2093, radiusMeters: 200, createdAt: _today),
       ])),
 ];
