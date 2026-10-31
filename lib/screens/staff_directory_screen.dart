@@ -105,7 +105,12 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
                         initialValue: selectedRole,
-                        decoration: const InputDecoration(labelText: 'Role'),
+                        decoration: InputDecoration(
+                          labelText: 'Role',
+                          helperText: !canChangeRole && existing.id == me.id
+                              ? 'Another admin (e.g. Romzan Ali) must change your role'
+                              : null,
+                        ),
                         items: [for (final r in roles) DropdownMenuItem(value: r, child: Text(roleLabel(r)))],
                         onChanged: canChangeRole ? (v) => setDialogState(() => selectedRole = v ?? selectedRole) : null,
                       ),
@@ -290,13 +295,14 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                                     ],
                                   ),
                                 ),
-                                if ((me?.isOrgAdmin ?? false) && e.id != me?.id)
+                                if (me?.isOrgAdmin ?? false)
                                   PopupMenuButton<String>(
                                     tooltip: 'More',
                                     onSelected: (v) => v == 'edit' ? _showEmployeeDialog(existing: e) : _confirmRemove(e),
-                                    itemBuilder: (_) => const [
-                                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                      PopupMenuItem(value: 'remove', child: Text('Remove')),
+                                    itemBuilder: (_) => [
+                                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                      if (e.id != me?.id)
+                                        const PopupMenuItem(value: 'remove', child: Text('Remove')),
                                     ],
                                   ),
                               ],
