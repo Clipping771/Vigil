@@ -16,8 +16,8 @@ import 'package:vigil/providers/staff_provider.dart';
 
 const _org = 'org-preview';
 
-/// Role of the signed-in preview user (Olivia); change to preview other roles.
-String previewRole = 'owner';
+/// Role of the signed-in preview user; change to preview other roles.
+String previewRole = 'admin';
 final _now = DateTime.now();
 final _today = DateTime(_now.year, _now.month, _now.day);
 
@@ -32,7 +32,7 @@ Employee _emp(String id, String name, String role, [String? site]) => Employee(
     );
 
 final _staff = [
-  _emp('e1', 'Alice Smith', 'owner', 'Oakleigh HQ & Plant'),
+  _emp('e1', 'Alice Smith', 'admin', 'Oakleigh HQ & Plant'),
   _emp('e2', 'Carol White', 'manager', 'Oakleigh HQ & Plant'),
   _emp('e3', 'Bob Jones', 'staff', 'Oakleigh HQ & Plant'),
   _emp('e4', 'Priya Patel', 'staff', 'Melbourne Distribution'),

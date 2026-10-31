@@ -304,7 +304,7 @@ BEGIN
   ON CONFLICT DO NOTHING;
 
   INSERT INTO public.employees (organization_id, email, full_name, role, auth_user_id)
-  VALUES (new_org, au.email, left(person, 120), 'owner', uid)
+  VALUES (new_org, au.email, left(person, 120), 'admin', uid)
   RETURNING * INTO emp;
 
   INSERT INTO public.audit_logs (organization_id, actor_id, action, entity_type, entity_id)

@@ -219,7 +219,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                     onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
                   ),
                 ),
-                for (final r in const ['all', 'staff', 'manager', 'hr', 'admin', 'owner'])
+                for (final r in const ['all', 'staff', 'manager', 'hr', 'admin'])
                   ChoiceChip(
                     label: Text(r == 'all' ? 'All' : roleLabel(r)),
                     selected: _roleFilter == r,
@@ -290,7 +290,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                                     ],
                                   ),
                                 ),
-                                if ((me?.isOrgAdmin ?? false) && e.id != me?.id && e.role != 'owner')
+                                if ((me?.isOrgAdmin ?? false) && e.id != me?.id)
                                   PopupMenuButton<String>(
                                     tooltip: 'More',
                                     onSelected: (v) => v == 'edit' ? _showEmployeeDialog(existing: e) : _confirmRemove(e),

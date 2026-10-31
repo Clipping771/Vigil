@@ -40,10 +40,10 @@ BEGIN
   -- 4. Insert into public.employees
   INSERT INTO public.employees (id, organization_id, email, full_name, role, site_location)
   VALUES
-  (uid1, org1_id, 'alice.smith@securelock.com', 'Alice Smith', 'owner', 'Oakleigh HQ'),
+  (uid1, org1_id, 'alice.smith@securelock.com', 'Alice Smith', 'admin', 'Oakleigh HQ'),
   (uid2, org1_id, 'bob.jones@securelock.com', 'Bob Jones', 'staff', 'Sydney Branch'),
   (uid3, org1_id, 'carol.white@securelock.com', 'Carol White', 'manager', 'Melbourne Factory'),
-  (uid4, org2_id, 'david.brown@acme.com', 'David Brown', 'owner', 'Brisbane Warehouse'),
+  (uid4, org2_id, 'david.brown@acme.com', 'David Brown', 'admin', 'Brisbane Warehouse'),
   (uid5, org1_id, 'admin@admin.com', 'System Administrator', 'system_admin', 'Global Operations');
 
   -- 5. Insert into public.shifts

@@ -21,7 +21,7 @@ void main() {
     await Supabase.initialize(url: 'http://127.0.0.1:9', publishableKey: 'test');
   });
 
-  for (final role in ['owner', 'staff', 'system_admin']) {
+  for (final role in ['admin', 'staff', 'system_admin']) {
     for (final theme in AppTheme.values) {
       for (final entry in _sizes.entries) {
         testWidgets('$role · ${theme.name} · ${entry.key}: all pages lay out cleanly', (tester) async {

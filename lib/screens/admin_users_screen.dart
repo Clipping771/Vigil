@@ -6,7 +6,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/auth_layout.dart' show validateEmail;
 import '../widgets/ui_kit.dart';
 
-const _roles = ['owner', 'admin', 'hr', 'manager', 'staff', 'system_admin'];
+const _roles = ['admin', 'hr', 'manager', 'staff', 'system_admin'];
 
 /// Platform-wide user management for system administrators.
 class AdminUsersScreen extends ConsumerStatefulWidget {

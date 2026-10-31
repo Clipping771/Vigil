@@ -318,8 +318,7 @@ class _UserMenu extends ConsumerWidget {
 
 String roleLabel(String role) => switch (role) {
       'system_admin' => 'System Admin',
-      'owner' => 'Owner',
-      'admin' => 'Admin',
+      'owner' || 'admin' => 'Admin',
       'hr' => 'HR',
       'manager' => 'Manager',
       _ => 'Staff',
