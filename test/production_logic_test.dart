@@ -99,6 +99,26 @@ void main() {
     });
   });
 
+  group('PDF export', () {
+    test('embeds a Unicode font so dashes in descriptions render', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final bytes = await ReportingEngine().buildPdf([
+        ExceptionRecord(
+          id: 'x',
+          organizationId: 'org-1',
+          employeeId: 'e1',
+          employeeName: 'Test staff',
+          exceptionType: 'late_clock_in',
+          severity: 'medium',
+          status: 'pending',
+          description: 'Clocked in 17 min late — shift started at 9:15 PM',
+          createdAt: DateTime(2026, 11, 1, 21, 33),
+        ),
+      ], organizationName: 'Org', period: '2 Oct 2026 – 1 Nov 2026');
+      expect(String.fromCharCodes(bytes), contains('Roboto'));
+    });
+  });
+
   group('Form validation', () {
     test('email', () {
       expect(validateEmail('person@company.com'), isNull);
