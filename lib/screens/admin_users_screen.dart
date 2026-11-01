@@ -175,6 +175,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     final email = TextEditingController(text: user?['email']);
     final site = TextEditingController(text: user?['site_location']);
     var role = (user?['role'] as String?) ?? 'admin';
+    if (!_roles.contains(role)) role = role == 'owner' ? 'admin' : 'staff';
     var org = (user?['organization_id'] as String?) ?? _orgFilter ?? _orgNames.keys.first;
     var saving = false;
 

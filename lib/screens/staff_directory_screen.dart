@@ -39,7 +39,8 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
     final emailController = TextEditingController(text: existing?.email);
     final siteController = TextEditingController(text: existing?.siteLocation);
     final roles = _assignableRoles(me);
-    String selectedRole = existing != null && roles.contains(existing.role) ? existing.role : 'staff';
+    final existingRole = existing?.role == 'owner' ? 'admin' : existing?.role;
+    String selectedRole = existingRole != null && roles.contains(existingRole) ? existingRole : 'staff';
     final canChangeRole = existing == null || (roles.contains(existing.role) && existing.id != me.id);
     bool isSaving = false;
 
@@ -108,7 +109,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                         decoration: InputDecoration(
                           labelText: 'Role',
                           helperText: !canChangeRole && existing.id == me.id
-                              ? 'Another admin (e.g. Romzan Ali) must change your role'
+                              ? 'Another admin must change your role'
                               : null,
                         ),
                         items: [for (final r in roles) DropdownMenuItem(value: r, child: Text(roleLabel(r)))],
@@ -173,7 +174,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
       ref.invalidate(staffProvider);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Only owners and admins can remove team members.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyError(e))));
       }
     }
   }
@@ -243,7 +244,7 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                 ),
                 data: (staff) {
                   final filtered = staff.where((e) {
-                    if (_roleFilter != 'all' && e.role != _roleFilter) return false;
+                    if (_roleFilter != 'all' && (e.role == 'owner' ? 'admin' : e.role) != _roleFilter) return false;
                     if (_query.isEmpty) return true;
                     return e.fullName.toLowerCase().contains(_query) ||
                         e.email.toLowerCase().contains(_query) ||

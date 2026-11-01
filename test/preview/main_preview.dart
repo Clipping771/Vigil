@@ -12,7 +12,7 @@ import 'preview_data.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  previewRole = Uri.base.queryParameters['role'] ?? 'owner';
+  previewRole = Uri.base.queryParameters['role'] ?? 'admin';
   await Supabase.initialize(url: 'http://127.0.0.1:9', publishableKey: 'preview');
   runApp(ProviderScope(overrides: previewOverrides, child: const VigilApp()));
 }

@@ -23,9 +23,9 @@ The **Vigil** database is built on **PostgreSQL (Supabase)**. It provides multi-
 ---
 
 ## 3. Supported Roles (`employees.role`)
-- `owner`: Organization creator with billing & admin rights
+- `owner`: Legacy role, converted to `admin` by migration 004
 - `system_admin`: Platform super admin with cross-tenant management
-- `admin`: Company administrator
+- `admin`: Company administrator (the organization's founder, `organizations.founder_employee_id`, can only be demoted or removed by a system admin)
 - `hr`: Human resources officer (leaves, compliance, audit)
 - `manager`: Site supervisor (approves shifts, exceptions, leaves)
 - `staff`: Frontline employee (clocks in/out, takes breaks, applies for leave)

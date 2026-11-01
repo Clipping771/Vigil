@@ -23,13 +23,15 @@ INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data) VALUE
   ('c0000000-0000-0000-0000-000000000001', 'nobody@x.test',     now(), '{}'),
   ('d0000000-0000-0000-0000-000000000001', 'unverified@x.test', NULL,  '{"company_name":"Sneaky"}');
 
--- 1. Self-service sign-up creates org + owner
+-- 1. Self-service sign-up creates org + admin (recorded as the founder)
 BEGIN;
 SELECT pg_temp.as_user('a0000000-0000-0000-0000-000000000001');
-DO $$ DECLARE e public.employees; BEGIN
+DO $$ DECLARE e public.employees; f uuid; BEGIN
   e := public.link_current_user();
-  IF e.role <> 'owner' OR e.auth_user_id IS NULL THEN RAISE EXCEPTION 'FAIL 1: got role % link %', e.role, e.auth_user_id; END IF;
-  RAISE NOTICE 'PASS 1: sign-up creates organization with an owner';
+  IF e.role <> 'admin' OR e.auth_user_id IS NULL THEN RAISE EXCEPTION 'FAIL 1: got role % link %', e.role, e.auth_user_id; END IF;
+  SELECT founder_employee_id INTO f FROM public.organizations WHERE id = e.organization_id;
+  IF f IS DISTINCT FROM e.id THEN RAISE EXCEPTION 'FAIL 1: founder is %', f; END IF;
+  RAISE NOTICE 'PASS 1: sign-up creates organization with an admin founder';
 END $$;
 COMMIT;
 
@@ -113,7 +115,7 @@ DO $$ DECLARE n int; BEGIN
 END $$;
 ROLLBACK;
 
--- 7. Manager cannot grant admin, owner can promote staff
+-- 7. Manager cannot grant admin, admin can promote staff
 BEGIN;
 SELECT pg_temp.as_user('a0000000-0000-0000-0000-000000000003');
 DO $$ BEGIN
@@ -130,11 +132,11 @@ DO $$ DECLARE n int; BEGIN
   UPDATE public.employees SET role = 'hr' WHERE email = 'staff.a@acme.test';
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL 7b'; END IF;
-  RAISE NOTICE 'PASS 7b: owner can change a staff role';
+  RAISE NOTICE 'PASS 7b: admin can change a staff role';
 END $$;
 ROLLBACK;
 
--- 8. Tenant isolation: Beta owner sees nothing from Acme
+-- 8. Tenant isolation: Beta admin sees nothing from Acme
 BEGIN;
 SELECT pg_temp.as_user('b0000000-0000-0000-0000-000000000001');
 DO $$ DECLARE n int; BEGIN
@@ -187,7 +189,7 @@ DO $$ DECLARE n int; BEGIN
 END $$;
 ROLLBACK;
 
--- 12. Leave: manager cannot approve own leave; owner can approve staff leave
+-- 12. Leave: manager cannot approve own leave; admin can approve staff leave
 BEGIN;
 SELECT pg_temp.as_user('a0000000-0000-0000-0000-000000000003');
 INSERT INTO public.leave_requests (organization_id, employee_id, start_date, end_date, leave_type)
@@ -204,8 +206,8 @@ SELECT pg_temp.as_user('a0000000-0000-0000-0000-000000000001');
 DO $$ DECLARE n int; BEGIN
   UPDATE public.leave_requests SET status = 'approved' WHERE status = 'pending';
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION 'FAIL 12b: owner could not approve (rows=%)', n; END IF;
-  RAISE NOTICE 'PASS 12b: owner can approve a manager''s leave';
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL 12b: admin could not approve (rows=%)', n; END IF;
+  RAISE NOTICE 'PASS 12b: admin can approve a manager''s leave';
 END $$;
 ROLLBACK;
 
@@ -222,13 +224,47 @@ DO $$ DECLARE n int; BEGIN
 END $$;
 ROLLBACK;
 
--- 14. Owner cannot delete themselves; exceptions keep the original description
+-- 14. Admin cannot delete themselves; exceptions keep the original description
 BEGIN;
 SELECT pg_temp.as_user('a0000000-0000-0000-0000-000000000001');
 DO $$ DECLARE n int; BEGIN
   DELETE FROM public.employees WHERE auth_user_id = auth.uid();
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 0 THEN RAISE EXCEPTION 'FAIL 14: owner deleted own account'; END IF;
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL 14: admin deleted own account'; END IF;
   RAISE NOTICE 'PASS 14: you cannot delete your own account';
+END $$;
+ROLLBACK;
+
+-- 15. Another admin cannot demote, remove or replace the founder
+BEGIN;
+SELECT pg_temp.as_user('a0000000-0000-0000-0000-000000000001');
+UPDATE public.employees SET role = 'admin' WHERE email = 'staff.a@acme.test';
+SELECT pg_temp.as_user('a0000000-0000-0000-0000-000000000002');
+DO $$ BEGIN
+  UPDATE public.employees SET role = 'staff' WHERE email = 'owner.a@acme.test';
+  RAISE EXCEPTION 'FAIL 15a: admin demoted the founder';
+EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+  RAISE NOTICE 'PASS 15a: founder cannot be demoted by another admin';
+END $$;
+DO $$ BEGIN
+  DELETE FROM public.employees WHERE email = 'owner.a@acme.test';
+  RAISE EXCEPTION 'FAIL 15b: admin removed the founder';
+EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+  RAISE NOTICE 'PASS 15b: founder cannot be removed by another admin';
+END $$;
+DO $$ BEGIN
+  UPDATE public.organizations SET founder_employee_id = public.current_employee_id();
+  RAISE EXCEPTION 'FAIL 15c: admin reassigned the founder';
+EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+  RAISE NOTICE 'PASS 15c: founder cannot be reassigned by another admin';
+END $$;
+DO $$ DECLARE n int; BEGIN
+  UPDATE public.employees SET full_name = 'Olivia Founder' WHERE email = 'owner.a@acme.test';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL 15d: admin could not edit the founder''s name'; END IF;
+  RAISE NOTICE 'PASS 15d: founder''s name can still be edited';
 END $$;
 ROLLBACK;

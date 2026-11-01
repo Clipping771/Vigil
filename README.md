@@ -10,7 +10,7 @@ Workforce attendance, rostering and compliance platform — Flutter (web, mobile
 - Leave requests and approvals
 - Compliance exceptions: late starts, overtime, 10-hour rest breaches, geofence breaches, leave conflicts
 - CSV / PDF compliance exports
-- Multi-tenant with row-level security and role-based access (owner, admin, HR, manager, staff, system admin)
+- Multi-tenant with row-level security and role-based access (admin, HR, manager, staff, system admin)
 - Light and dark mode (follows the device on first launch)
 - Optional AI assistant (bring your own Gemini / OpenAI / Claude key)
 
@@ -24,7 +24,8 @@ Fresh project:
 2. `database/migrations/001_production_security.sql` — RLS, roles, sign-up
 3. `database/migrations/002_exception_rules.sql` — exception types, server-side no-show detection (enable `pg_cron` first)
 4. `database/migrations/003_exception_review.sql` — who reviewed each issue, audit log, staff see only their own issues
-5. `database/enable_realtime.sql`
+5. `database/migrations/004_admin_founder.sql` — converts legacy owners to admins; other admins cannot demote or remove the workspace founder
+6. `database/enable_realtime.sql`
 
 Existing database: run the migrations in order (each is idempotent and safe to re-run), then `enable_realtime.sql`.
 
@@ -40,7 +41,7 @@ flutter run --dart-define-from-file=.env
 
 ### 3. Accounts
 
-- **New organization:** "Create a workspace" on the landing page. The person who signs up becomes the owner.
+- **New organization:** "Create a workspace" on the landing page. The person who signs up becomes an admin and the workspace founder; other admins cannot demote or remove them.
 - **Employees:** a manager invites them from **Staff**. They then choose "Activate your account" on the sign-in page using the same email.
 - **System admin (platform-wide):** run `database/promote_admin.sql` in the SQL editor.
 
@@ -74,6 +75,7 @@ psql -d vigil_test -f database/schema.sql
 psql -d vigil_test -f database/migrations/001_production_security.sql
 psql -d vigil_test -f database/migrations/002_exception_rules.sql
 psql -d vigil_test -f database/migrations/003_exception_review.sql
+psql -d vigil_test -f database/migrations/004_admin_founder.sql
 psql -d vigil_test -f database/tests/rls_tests.sql   # prints PASS/FAIL per scenario
 psql -d vigil_test -f database/tests/exception_rules_tests.sql
 psql -d vigil_test -f database/tests/exception_review_tests.sql
