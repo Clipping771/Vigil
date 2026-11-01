@@ -5,6 +5,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clock_event.dart';
 import 'auth_provider.dart';
 
+/// Length of a completed break, measured from its timestamps to the second
+/// (`duration_minutes` is only a rounded summary). Open breaks count as zero.
+Duration breakLength(Map<String, dynamic> b) {
+  final start = DateTime.tryParse('${b['start_time']}');
+  final end = b['end_time'] == null ? null : DateTime.tryParse('${b['end_time']}');
+  if (start == null || end == null) return Duration(minutes: (b['duration_minutes'] as num?)?.toInt() ?? 0);
+  final d = end.difference(start);
+  return d.isNegative ? Duration.zero : d;
+}
+
 enum ShiftStatus {
   clockedOut,
   clockedIn,
@@ -159,13 +169,13 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       final breaks = List<Map<String, dynamic>>.from(breaksRes);
 
       // Compute total breaks
-      int totalBreakMinutes = 0;
+      var totalBreak = Duration.zero;
       DateTime? activeBreak;
       for (final b in breaks) {
         if (b['end_time'] == null) {
           activeBreak = DateTime.tryParse(b['start_time'].toString())?.toLocal();
         } else {
-          totalBreakMinutes += (b['duration_minutes'] as num?)?.toInt() ?? 0;
+          totalBreak += breakLength(b);
         }
       }
 
@@ -199,16 +209,16 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
 
       // Completed breaks taken during the open segment are subtracted from the
       // live timer; all other completed breaks come off the closed segments.
-      int currentSegmentBreakMinutes = 0;
+      var currentSegmentBreak = Duration.zero;
       if (segmentClockIn != null) {
         for (final b in breaks) {
           final start = DateTime.tryParse(b['start_time'].toString())?.toLocal();
           if (b['end_time'] != null && start != null && !start.isBefore(segmentClockIn)) {
-            currentSegmentBreakMinutes += (b['duration_minutes'] as num?)?.toInt() ?? 0;
+            currentSegmentBreak += breakLength(b);
           }
         }
       }
-      final netCompletedWorked = completedWorked - Duration(minutes: totalBreakMinutes - currentSegmentBreakMinutes);
+      final netCompletedWorked = completedWorked - (totalBreak - currentSegmentBreak);
 
       state = AttendanceState(
         status: computedStatus,
@@ -216,8 +226,8 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         lastClockOut: lastClockOut,
         activeBreakStart: activeBreak,
         completedWorkedDuration: netCompletedWorked.isNegative ? Duration.zero : netCompletedWorked,
-        totalBreakDuration: Duration(minutes: totalBreakMinutes),
-        currentSegmentBreak: Duration(minutes: currentSegmentBreakMinutes),
+        totalBreakDuration: totalBreak,
+        currentSegmentBreak: currentSegmentBreak,
         todayEvents: events.reversed.toList(), // Most recent first for display
         todayBreaks: breaks,
         isLoading: false,

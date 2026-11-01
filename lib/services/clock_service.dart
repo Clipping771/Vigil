@@ -206,15 +206,37 @@ class ClockService {
     if (activeBreaks.isNotEmpty) {
       final breakId = activeBreaks.first['id'];
       final startTime = DateTime.parse(activeBreaks.first['start_time']).toLocal();
-      final duration = now.difference(startTime).inMinutes;
 
+      // Timers use the exact timestamps; this is only a rounded summary.
       await _supabase.from('breaks').update({
         'end_time': now.toUtc().toIso8601String(),
-        'duration_minutes': duration < 1 ? 1 : duration,
+        'duration_minutes': (now.difference(startTime).inSeconds / 60).round(),
       }).eq('id', breakId);
     }
 
-    _ref.read(attendanceProvider.notifier).refresh();
+    final attendance = _ref.read(attendanceProvider.notifier);
+    await attendance.loadTodayAttendance();
+    await _checkBreakPolicy(user.id, user.organizationId);
+  }
+
+  /// Raises an excessive-breaks issue (once per shift) when the open clock-in
+  /// has more breaks, or more break time, than the policy allows.
+  Future<void> _checkBreakPolicy(String employeeId, String organizationId) async {
+    final state = _ref.read(attendanceProvider);
+    final clockIn = state.lastClockIn;
+    if (clockIn == null || state.status == ShiftStatus.clockedOut) return;
+    final breaks = [
+      for (final b in state.todayBreaks)
+        if (b['end_time'] != null && !(DateTime.tryParse('${b['start_time']}')?.isBefore(clockIn) ?? true)) breakLength(b),
+    ];
+    final issue = ExceptionEngine.evaluateBreaks(
+      breaks: breaks,
+      clockInTime: clockIn,
+      employeeId: employeeId,
+      organizationId: organizationId,
+      shiftId: (await _findActiveShift(employeeId, DateTime.now()))?.id,
+    );
+    if (issue != null) await raiseExceptions([issue]);
   }
 
   /// Records a completed quick break (for instant compliance logs)

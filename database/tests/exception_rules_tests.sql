@@ -49,3 +49,14 @@ EXCEPTION WHEN insufficient_privilege THEN
   RAISE NOTICE 'PASS E4: only the server can run the detector';
 END $$;
 ROLLBACK;
+
+-- 005: excessive_breaks is a valid type.
+DO $$
+DECLARE
+  org uuid := (SELECT id FROM public.organizations WHERE name = 'Acme');
+  staff uuid := (SELECT id FROM public.employees WHERE email = 'staff.a@acme.test');
+BEGIN
+  INSERT INTO public.exception_records (organization_id, employee_id, exception_type, severity, description)
+  VALUES (org, staff, 'excessive_breaks', 'medium', 'test');
+  RAISE NOTICE 'PASS E5: excessive_breaks is a valid exception type';
+END $$;

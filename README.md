@@ -8,7 +8,7 @@ Workforce attendance, rostering and compliance platform — Flutter (web, mobile
 - Live workforce board (who is on shift / on break)
 - Rosters with overnight shifts and overlap checks
 - Leave requests and approvals
-- Compliance exceptions: late starts, overtime, 10-hour rest breaches, geofence breaches, leave conflicts
+- Compliance exceptions: late starts, overtime, excessive breaks, 10-hour rest breaches, geofence breaches, leave conflicts
 - CSV / PDF compliance exports
 - Multi-tenant with row-level security and role-based access (admin, HR, manager, staff, system admin)
 - Light and dark mode (follows the device on first launch)
@@ -25,7 +25,8 @@ Fresh project:
 3. `database/migrations/002_exception_rules.sql` — exception types, server-side no-show detection (enable `pg_cron` first)
 4. `database/migrations/003_exception_review.sql` — who reviewed each issue, audit log, staff see only their own issues
 5. `database/migrations/004_admin_founder.sql` — converts legacy owners to admins; other admins cannot demote or remove the workspace founder
-6. `database/enable_realtime.sql`
+6. `database/migrations/005_break_rules.sql` — allows the excessive-breaks issue type
+7. `database/enable_realtime.sql`
 
 Existing database: run the migrations in order (each is idempotent and safe to re-run), then `enable_realtime.sql`.
 
@@ -76,6 +77,7 @@ psql -d vigil_test -f database/migrations/001_production_security.sql
 psql -d vigil_test -f database/migrations/002_exception_rules.sql
 psql -d vigil_test -f database/migrations/003_exception_review.sql
 psql -d vigil_test -f database/migrations/004_admin_founder.sql
+psql -d vigil_test -f database/migrations/005_break_rules.sql
 psql -d vigil_test -f database/tests/rls_tests.sql   # prints PASS/FAIL per scenario
 psql -d vigil_test -f database/tests/exception_rules_tests.sql
 psql -d vigil_test -f database/tests/exception_review_tests.sql

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clock_event.dart';
+import 'attendance_provider.dart' show breakLength;
 import 'auth_provider.dart';
 
 enum StaffWorkStatus {
@@ -189,13 +190,13 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
         final empBreaks = allBreaks.where((b) => b['employee_id'] == empId).toList();
 
         // Calculate breaks
-        int totalBreakMinutes = 0;
+        var totalBreak = Duration.zero;
         DateTime? activeBreak;
         for (final b in empBreaks) {
           if (b['end_time'] == null) {
             activeBreak = DateTime.tryParse(b['start_time'].toString());
           } else {
-            totalBreakMinutes += (b['duration_minutes'] as num?)?.toInt() ?? 0;
+            totalBreak += breakLength(b);
           }
         }
 
@@ -233,17 +234,17 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
           status = StaffWorkStatus.clockedOut;
         }
 
-        int currentSegmentBreakMinutes = 0;
+        var currentSegmentBreak = Duration.zero;
         final openSegmentStart = segmentClockIn;
         if (openSegmentStart != null) {
           for (final b in empBreaks) {
             final start = DateTime.tryParse(b['start_time'].toString());
             if (b['end_time'] != null && start != null && !start.isBefore(openSegmentStart)) {
-              currentSegmentBreakMinutes += (b['duration_minutes'] as num?)?.toInt() ?? 0;
+              currentSegmentBreak += breakLength(b);
             }
           }
         }
-        final netWorked = completedWorked - Duration(minutes: totalBreakMinutes - currentSegmentBreakMinutes);
+        final netWorked = completedWorked - (totalBreak - currentSegmentBreak);
 
         liveStaff.add(StaffLiveAttendance(
           employeeId: empId,
@@ -255,8 +256,8 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
           shiftStartTime: segmentClockIn ?? currentShiftStart,
           breakStartTime: activeBreak,
           completedWorkedDuration: netWorked.isNegative ? Duration.zero : netWorked,
-          totalBreakDuration: Duration(minutes: totalBreakMinutes),
-          currentSegmentBreak: Duration(minutes: currentSegmentBreakMinutes),
+          totalBreakDuration: totalBreak,
+          currentSegmentBreak: currentSegmentBreak,
           latitude: lastLat,
           longitude: lastLng,
           isGeofenced: isGeofenced,

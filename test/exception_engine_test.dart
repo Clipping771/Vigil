@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vigil/models/clock_event.dart';
 import 'package:vigil/models/exception_record.dart';
 import 'package:vigil/models/shift.dart';
+import 'package:vigil/providers/attendance_provider.dart';
 import 'package:vigil/services/exception_engine.dart';
 
 final _day = DateTime(2026, 10, 29);
@@ -131,6 +132,48 @@ void main() {
 
     test('a completed shift raises nothing', () {
       expect(scan([_punch('clock_in', _at(8, 40)), _punch('clock_out', _at(17, 2))], _at(19)), isEmpty);
+    });
+  });
+
+  group('Breaks', () {
+    ExceptionRecord? check(List<int> minutes) => ExceptionEngine.evaluateBreaks(
+        breaks: [for (final m in minutes) Duration(minutes: m)], clockInTime: _at(9), employeeId: 'e1', organizationId: 'org');
+
+    test('normal breaks raise nothing', () {
+      expect(check([]), isNull);
+      expect(check([10, 30, 10]), isNull); // 3 breaks, 50 min
+    });
+
+    test('too many breaks are flagged', () {
+      final r = check([5, 5, 5, 5])!;
+      expect(r.exceptionType, 'excessive_breaks');
+      expect(r.severity, 'medium');
+      expect(r.description, contains('Took 4 breaks (20 min in total) since clocking in at 9:00 AM'));
+    });
+
+    test('too much break time is flagged, more than 90 min is high', () {
+      expect(check([40, 25])!.severity, 'medium');
+      expect(check([100])!.severity, 'high');
+    });
+
+    test('break length uses exact timestamps, not rounded minutes', () {
+      final b = {
+        'start_time': DateTime.utc(2026, 11, 2, 1, 0, 0).toIso8601String(),
+        'end_time': DateTime.utc(2026, 11, 2, 1, 0, 5).toIso8601String(),
+        'duration_minutes': 1,
+      };
+      expect(breakLength(b), const Duration(seconds: 5));
+      expect(breakLength({'start_time': b['start_time'], 'end_time': null}), Duration.zero);
+    });
+
+    test('a short break does not reset the time worked', () {
+      // Clocked in 30 s ago and took a 5 s break: about 25 s worked, not zero.
+      final s = AttendanceState(
+        status: ShiftStatus.clockedIn,
+        lastClockIn: DateTime.now().subtract(const Duration(seconds: 30)),
+        currentSegmentBreak: const Duration(seconds: 5),
+      );
+      expect(s.currentLiveDuration.inSeconds, inInclusiveRange(24, 26));
     });
   });
 }

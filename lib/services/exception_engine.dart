@@ -12,6 +12,11 @@ const minimumMealBreak = Duration(minutes: 30);
 /// Minimum rest between consecutive shifts.
 const minimumRestBetweenShifts = Duration(hours: 10);
 
+/// Break policy for one clock-in: more breaks, or more break time, than this
+/// is flagged so a manager can check it.
+const maxBreaksPerShift = 3;
+const maxBreakTimePerShift = Duration(minutes: 60);
+
 /// Pure compliance rules. Nothing here touches the network, so every rule is
 /// unit-tested (see test/exception_engine_test.dart).
 class ExceptionEngine {
@@ -135,6 +140,31 @@ class ExceptionEngine {
       ));
     }
     return out;
+  }
+
+  /// Checked when a break ends: too many breaks, or too much break time,
+  /// since [clockInTime]. [breaks] are the completed breaks in that segment.
+  static ExceptionRecord? evaluateBreaks({
+    required List<Duration> breaks,
+    required DateTime clockInTime,
+    required String employeeId,
+    required String organizationId,
+    String? shiftId,
+  }) {
+    final total = breaks.fold(Duration.zero, (a, b) => a + b);
+    final tooMany = breaks.length > maxBreaksPerShift;
+    final tooLong = total > maxBreakTimePerShift;
+    if (!tooMany && !tooLong) return null;
+    return _record(
+      organizationId: organizationId,
+      employeeId: employeeId,
+      shiftId: shiftId,
+      type: 'excessive_breaks',
+      severity: total > maxBreakTimePerShift * 1.5 || breaks.length > maxBreaksPerShift * 2 ? 'high' : 'medium',
+      description: 'Took ${breaks.length} break${breaks.length == 1 ? '' : 's'} (${_duration(total)} in total) since clocking in at '
+          '${_time.format(clockInTime.toLocal())} — the limit is $maxBreaksPerShift breaks and '
+          '${maxBreakTimePerShift.inMinutes} min per shift.',
+    );
   }
 
   /// Shifts with no clock-in after the grace period (no-shows), and shifts

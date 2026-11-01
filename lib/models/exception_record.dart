@@ -71,6 +71,7 @@ class ExceptionRecord {
         'geofence_violation' => 'Outside work site',
         'fair_work_compliance_breach' => 'Fair Work break or rest breach',
         'leave_roster_conflict' => 'Rostered during leave',
+        'excessive_breaks' => 'Excessive breaks',
         'statistical_anomaly' => 'Unusual punch pattern',
         'fraud_risk' => 'Possible buddy punching',
         _ => formattedType,

@@ -7,9 +7,10 @@ import '../models/exception_record.dart';
 import '../models/geofence_zone.dart';
 import '../models/leave_request.dart';
 import '../models/shift.dart';
+import '../providers/attendance_provider.dart' show breakLength;
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
-import 'exception_engine.dart' show mealBreakAfter, minimumMealBreak, minimumRestBetweenShifts;
+import 'exception_engine.dart' show maxBreakTimePerShift, maxBreaksPerShift, mealBreakAfter, minimumMealBreak, minimumRestBetweenShifts;
 
 /// How far back and ahead the assistant can see.
 const agentHistoryDays = 14;
@@ -134,6 +135,7 @@ String formatAgentContext({
     'Overtime allowed after shift end: ${settings.allowedOvertimeMinutes} min',
     'Meal break: at least ${minimumMealBreak.inMinutes} min once more than ${mealBreakAfter.inHours}h is worked (Fair Work)',
     'Rest between shifts: at least ${minimumRestBetweenShifts.inHours}h',
+    'Breaks: at most $maxBreaksPerShift breaks and ${maxBreakTimePerShift.inMinutes} min of breaks per shift',
   ]);
 
   section('Work sites (geofences)', [
@@ -163,7 +165,7 @@ String formatAgentContext({
       continue;
     }
     final key = '$empId|${DateFormat('yyyy-MM-dd').format(start.toLocal())}';
-    breakMinutes[key] = (breakMinutes[key] ?? 0) + ((br['duration_minutes'] as num?)?.toInt() ?? end.difference(start).inMinutes);
+    breakMinutes[key] = (breakMinutes[key] ?? 0) + breakLength(br).inMinutes;
   }
 
   final liveLines = <String>[];
