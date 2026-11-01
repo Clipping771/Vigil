@@ -1,16 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import '../services/agent_actions.dart';
 import '../services/agent_service.dart';
 
-typedef ChatMessage = ({bool fromAgent, String text});
+class ChatMessage {
+  final bool fromAgent;
+  final String text;
+
+  /// Changes Vigil AI prepared in this reply, each waiting for approval.
+  final List<AgentProposal> proposals;
+
+  const ChatMessage({required this.fromAgent, required this.text, this.proposals = const []});
+
+  ChatMessage withProposals(List<AgentProposal> p) => ChatMessage(fromAgent: fromAgent, text: text, proposals: p);
+
+  /// The message as the model sees it later, including what happened to each card.
+  AgentTurn get turn => (fromAgent: fromAgent, text: [text, for (final p in proposals) p.historyNote].where((s) => s.isNotEmpty).join('\n'));
+}
 
 /// Conversation with Vigil AI, kept for the session so it survives closing the panel.
-final agentMessagesProvider = StateProvider<List<ChatMessage>>((ref) => [
-      (
+final agentMessagesProvider = StateProvider<List<ChatMessage>>((ref) => const [
+      ChatMessage(
         fromAgent: true,
-        text: 'Hi, I am Vigil AI. I can see your live rosters, attendance, issues and leave. '
-            'Ask me things like "who is late today?", "how many hours did Bob work this week?" or '
-            '"any rest breaches next week?". Add your API key in Settings first.',
+        text: 'Hi, I am Vigil AI. I can see your live rosters, attendance, issues and leave, and I can prepare changes '
+            'like approving leave, resolving issues or adding shifts. Nothing changes until you tap Approve. '
+            'Add your API key in Settings first.',
       ),
     ]);
 
@@ -59,8 +74,8 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
     final text = (preset ?? _controller.text).trim();
     if (text.isEmpty || _loading) return;
     final messages = ref.read(agentMessagesProvider.notifier);
-    final history = messages.state.skip(1).toList(); // Without the greeting.
-    messages.state = [...messages.state, (fromAgent: false, text: text)];
+    final history = messages.state.skip(1).map((m) => m.turn).toList(); // Without the greeting.
+    messages.state = [...messages.state, ChatMessage(fromAgent: false, text: text)];
     setState(() => _loading = true);
     _controller.clear();
     _scrollToEnd();
@@ -68,10 +83,116 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
     // Navigation commands should act on the page behind this dialog.
     final pageContext = Navigator.of(context).context;
     final reply = await ref.read(agentServiceProvider).executeCommand(text, pageContext, history: history);
-    messages.state = [...messages.state, (fromAgent: true, text: reply)];
+    messages.state = [...messages.state, ChatMessage(fromAgent: true, text: reply.text, proposals: reply.proposals)];
     if (!mounted) return;
     setState(() => _loading = false);
     _scrollToEnd();
+  }
+
+  /// Runs (or cancels) the proposals at [indexes] of message [messageIndex],
+  /// one at a time, recording the outcome on each card.
+  Future<void> _decide(int messageIndex, List<int> indexes, {required bool approve}) async {
+    final messages = ref.read(agentMessagesProvider.notifier);
+    void update(int i, AgentProposal Function(AgentProposal) change) {
+      final list = [...messages.state];
+      final m = list[messageIndex];
+      list[messageIndex] = m.withProposals([...m.proposals]..[i] = change(m.proposals[i]));
+      messages.state = list;
+    }
+
+    for (final i in indexes) {
+      if (messages.state[messageIndex].proposals[i].status != ProposalStatus.pending) continue;
+      if (!approve) {
+        update(i, (p) => p.copyWith(status: ProposalStatus.cancelled, result: 'Cancelled'));
+        continue;
+      }
+      update(i, (p) => p.copyWith(status: ProposalStatus.running));
+      try {
+        final result = await ref.read(agentActionsProvider).execute(messages.state[messageIndex].proposals[i]);
+        update(i, (p) => p.copyWith(status: ProposalStatus.done, result: result));
+      } catch (e) {
+        final reason = e is PostgrestException ? e.message : e.toString().replaceFirst('Exception: ', '');
+        update(i, (p) => p.copyWith(status: ProposalStatus.failed, result: reason));
+      }
+    }
+  }
+
+  Widget _proposalCards(int messageIndex, ChatMessage m) {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+    final pending = [
+      for (var i = 0; i < m.proposals.length; i++)
+        if (m.proposals[i].status == ProposalStatus.pending) i,
+    ];
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 320),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < m.proposals.length; i++)
+            Card(
+              margin: const EdgeInsets.only(bottom: 6),
+              elevation: 0,
+              color: cs.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: cs.outlineVariant)),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.pending_actions_outlined, size: 18, color: cs.primary),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(m.proposals[i].summary, style: t.bodyMedium)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    switch (m.proposals[i].status) {
+                      ProposalStatus.pending => Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 4,
+                          children: [
+                            TextButton(onPressed: () => _decide(messageIndex, [i], approve: false), child: const Text('Cancel')),
+                            FilledButton.tonal(onPressed: () => _decide(messageIndex, [i], approve: true), child: const Text('Approve')),
+                          ],
+                        ),
+                      ProposalStatus.running => const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        ),
+                      final status => Padding(
+                          padding: const EdgeInsets.fromLTRB(26, 0, 4, 6),
+                          child: Text(
+                            '${switch (status) { ProposalStatus.done => '✓ ', ProposalStatus.failed => '✗ ', _ => '' }}${m.proposals[i].result ?? ''}',
+                            style: t.bodySmall?.copyWith(
+                              color: switch (status) {
+                                ProposalStatus.done => cs.primary,
+                                ProposalStatus.failed => cs.error,
+                                _ => cs.onSurfaceVariant,
+                              },
+                            ),
+                          ),
+                        ),
+                    },
+                  ],
+                ),
+              ),
+            ),
+          if (pending.length > 1)
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 4,
+              children: [
+                TextButton(onPressed: () => _decide(messageIndex, pending, approve: false), child: const Text('Cancel all')),
+                FilledButton(onPressed: () => _decide(messageIndex, pending, approve: true), child: Text('Approve all ${pending.length}')),
+              ],
+            ),
+        ],
+      ),
+    );
   }
 
   void _scrollToEnd() {
@@ -132,7 +253,7 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
                     );
                   }
                   final m = messages[i];
-                  return Align(
+                  final bubble = Align(
                     alignment: m.fromAgent ? Alignment.centerLeft : Alignment.centerRight,
                     child: Container(
                       constraints: const BoxConstraints(maxWidth: 300),
@@ -149,6 +270,11 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
                       ),
                       child: SelectableText(m.text, style: t.bodyMedium?.copyWith(color: m.fromAgent ? cs.onSurface : cs.onPrimary)),
                     ),
+                  );
+                  if (m.proposals.isEmpty) return bubble;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [if (m.text.isNotEmpty) bubble, _proposalCards(i, m)],
                   );
                 },
               ),

@@ -16,6 +16,9 @@ const agentHistoryDays = 14;
 const agentRosterAheadDays = 28;
 const agentIssueDays = 60;
 
+/// Short record reference shown to the model ("#1a2b3c4d").
+String shortId(String id) => id.length > 8 ? id.substring(0, 8) : id;
+
 /// Everything Vigil AI may read for one question. Staff only get their own
 /// records, matching what the app itself shows them.
 class AgentData {
@@ -138,8 +141,8 @@ String formatAgentContext({
   ]);
 
   if (me.isManager) {
-    section('Staff (name | role | site | email)', [
-      for (final e in data.employees) '${e.fullName} | ${e.role} | ${e.siteLocation ?? '-'} | ${e.email}',
+    section('Staff (#id | name | role | site | email)', [
+      for (final e in data.employees) '#${shortId(e.id)} | ${e.fullName} | ${e.role} | ${e.siteLocation ?? '-'} | ${e.email}',
     ]);
   }
 
@@ -224,24 +227,24 @@ String formatAgentContext({
   }
 
   final shifts = [...data.shifts]..sort((a, b) => a.startTime.compareTo(b.startTime));
-  section('Rostered shifts, $agentHistoryDays days back to $agentRosterAheadDays days ahead (date | time | employee | site)', [
+  section('Rostered shifts, $agentHistoryDays days back to $agentRosterAheadDays days ahead (#id | date | time | employee | site)', [
     for (final s in shifts)
-      '${day.format(s.startTime.toLocal())}${dayTag(s.startTime)} | ${hm.format(s.startTime.toLocal())}-${hm.format(s.endTime.toLocal())} '
+      '#${shortId(s.id)} | ${day.format(s.startTime.toLocal())}${dayTag(s.startTime)} | ${hm.format(s.startTime.toLocal())}-${hm.format(s.endTime.toLocal())} '
           '(${dur(s.endTime.difference(s.startTime))}) | ${who(s.employeeId)} | ${s.siteLocation}'
           '${s.startTime.isBefore(now) && s.endTime.isAfter(now) ? ' | IN PROGRESS' : ''}',
   ], cap: 600);
 
   final issues = [...data.exceptions]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   final pending = issues.where((e) => e.status == 'pending').toList();
-  String issue(ExceptionRecord e) => '${when(e.createdAt)} | ${who(e.employeeId, e.employeeName)} | ${e.typeTitle} | ${e.severity} | ${e.status}'
+  String issue(ExceptionRecord e) => '#${shortId(e.id)} | ${when(e.createdAt)} | ${who(e.employeeId, e.employeeName)} | ${e.typeTitle} | ${e.severity} | ${e.status}'
       '${e.reviewedById == null ? '' : ' by ${who(e.reviewedById!, e.reviewedByName)}'}'
       ' | ${e.description ?? ''}${(e.resolutionNote ?? '').isEmpty ? '' : ' | note: ${e.resolutionNote}'}';
   section('Open compliance issues (pending review)', pending.map(issue), cap: 150);
   section('Reviewed issues, last $agentIssueDays days', issues.where((e) => e.status != 'pending').map(issue), cap: 150);
 
-  section('Leave requests (employee | type | dates | days | status | reason)', [
+  section('Leave requests (#id | employee | type | dates | days | status | reason)', [
     for (final l in data.leave)
-      '${who(l.employeeId, l.employeeName)} | ${l.leaveType} | ${day.format(l.startDate)} to ${day.format(l.endDate)} | '
+      '#${shortId(l.id)} | ${who(l.employeeId, l.employeeName)} | ${l.leaveType} | ${day.format(l.startDate)} to ${day.format(l.endDate)} | '
           '${l.endDate.difference(l.startDate).inDays + 1} | ${l.status} | ${l.reason ?? '-'}',
   ]);
 

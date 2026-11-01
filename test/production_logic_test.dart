@@ -2,8 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vigil/models/employee.dart';
 import 'package:vigil/models/clock_event.dart';
 import 'package:vigil/models/exception_record.dart';
+import 'package:vigil/models/leave_request.dart';
 import 'package:vigil/models/shift.dart';
 import 'package:vigil/providers/settings_provider.dart';
+import 'package:vigil/services/agent_actions.dart';
 import 'package:vigil/services/agent_context.dart';
 import 'package:vigil/services/agent_service.dart';
 import 'package:vigil/services/exception_engine.dart';
@@ -174,6 +176,50 @@ void main() {
           me: staff, settings: const AppSettings(), now: DateTime(2026, 11, 2), data: AgentData(organizationName: 'Acme', employees: [staff]));
       expect(text, contains("only this user's own records"));
       expect(text, isNot(contains('## Staff')));
+    });
+
+    test('proposal lines are parsed and hidden from the reply', () {
+      final r = parseAgentReply('I prepared it.\nPROPOSE: {"type":"approve_leave","id":"abcd1234"}\nPROPOSE: {"type":"remove_shift","id":"ef567890"}');
+      expect(r.text, 'I prepared it.');
+      expect(r.proposals.map((p) => p['type']), ['approve_leave', 'remove_shift']);
+    });
+
+    group('proposals need a real record and permission', () {
+      final manager = _employee('manager');
+      final bob = _employee('staff');
+      LeaveRequest leave(String id, String status) => LeaveRequest(
+          id: id, employeeId: bob.id, leaveType: 'annual', startDate: DateTime(2026, 11, 4), endDate: DateTime(2026, 11, 6), status: status);
+      final data = AgentData(
+        organizationName: 'Acme',
+        employees: [manager, bob],
+        leave: [leave('aaaa1111-0000', 'pending'), leave('bbbb2222-0000', 'approved')],
+      );
+
+      test('manager gets a card written from the real record', () {
+        final r = resolveProposals([{'type': 'approve_leave', 'id': 'aaaa1111'}], manager, data);
+        expect(r.rejected, isEmpty);
+        expect(r.proposals.single.summary, 'Approve annual leave for Test staff: Wed 4 Nov 2026 to Fri 6 Nov 2026 (3 days)');
+        expect(r.proposals.single.args['id'], 'aaaa1111-0000');
+      });
+
+      test('unknown, already decided or unauthorised changes are rejected', () {
+        final r = resolveProposals([
+          {'type': 'approve_leave', 'id': 'zzzz9999'},
+          {'type': 'approve_leave', 'id': 'bbbb2222'},
+          {'type': 'delete_everything'},
+        ], manager, data);
+        expect(r.proposals, isEmpty);
+        expect(r.rejected, hasLength(3));
+        expect(resolveProposals([{'type': 'approve_leave', 'id': 'aaaa1111'}], bob, data).rejected.single, contains('only managers'));
+      });
+
+      test('overnight shifts end the next day', () {
+        final r = resolveProposals([
+          {'type': 'add_shift', 'employee_id': bob.id, 'start': '2026-11-03T22:00', 'end': '2026-11-03T06:00', 'site': 'Plant'},
+        ], manager, data);
+        expect(r.proposals.single.summary, 'Add shift for Test staff: Tue 3 Nov 2026 22:00-06:00 at Plant');
+        expect(DateTime.parse(r.proposals.single.args['end']), DateTime(2026, 11, 4, 6));
+      });
     });
   });
 

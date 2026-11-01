@@ -9,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/app_shell.dart' show appDestinations, canAccessPath;
+import 'agent_actions.dart';
 import 'agent_context.dart';
 
 final agentServiceProvider = Provider((ref) => AgentService(ref));
@@ -26,6 +27,9 @@ typedef AgentTurn = ({bool fromAgent, String text});
 /// How many earlier messages are sent with each question.
 const agentHistoryTurns = 12;
 
+/// A reply to show, plus any changes waiting for the user's approval.
+typedef AgentAnswer = ({String text, List<AgentProposal> proposals});
+
 class AgentService {
   final Ref _ref;
 
@@ -33,10 +37,12 @@ class AgentService {
 
   /// Answers [prompt] from a fresh snapshot of the organization's data, with
   /// the earlier conversation in [history]. Page and theme changes the model
-  /// asks for are carried out on [context].
-  Future<String> executeCommand(String prompt, BuildContext context, {List<AgentTurn> history = const []}) async {
+  /// asks for are carried out on [context]; data changes come back as
+  /// proposals that only run once the user approves them.
+  Future<AgentAnswer> executeCommand(String prompt, BuildContext context, {List<AgentTurn> history = const []}) async {
+    AgentAnswer say(String text) => (text: text, proposals: const <AgentProposal>[]);
     final me = _ref.read(authProvider).currentUser;
-    if (me == null) return 'Please sign in first.';
+    if (me == null) return say('Please sign in first.');
 
     try {
       final now = DateTime.now();
@@ -47,24 +53,28 @@ class AgentService {
       final turns = [...recent.skipWhile((t) => t.fromAgent), (fromAgent: false, text: prompt)];
       final raw = await _callLLM(turns, system);
       final error = _errorIn(raw);
-      if (error != null) return error;
+      if (error != null) return say(error);
 
       final reply = parseAgentReply(raw);
       var text = reply.text;
-      if (reply.action != null) {
-        if (!context.mounted) return text.isEmpty ? 'Action cancelled: the screen was closed.' : text;
+      if (reply.action != null && context.mounted) {
         final done = _runAction(reply.action!, me, context);
         if (text.isEmpty) text = done;
       }
-      return text.isEmpty ? "Sorry, I didn't get an answer. Please try rephrasing." : text;
+      final review = resolveProposals(reply.proposals, me, data);
+      if (review.rejected.isNotEmpty) {
+        text = [if (text.isNotEmpty) text, "I couldn't prepare: ${review.rejected.join('; ')}."].join('\n\n');
+      }
+      if (text.isEmpty && review.proposals.isEmpty) text = "Sorry, I didn't get an answer. Please try rephrasing.";
+      return (text: text, proposals: review.proposals);
     } on TimeoutException {
-      return 'The AI service took too long to answer. Please try again.';
+      return say('The AI service took too long to answer. Please try again.');
     } on http.ClientException catch (e) {
       debugPrint('Agent network error: $e');
-      return "Couldn't reach the AI service. Check your connection and try again.";
+      return say("Couldn't reach the AI service. Check your connection and try again.");
     } catch (e) {
       debugPrint('Agent error: $e');
-      return "Sorry, I couldn't process that request. Please try again.";
+      return say("Sorry, I couldn't process that request. Please try again.");
     }
   }
 
@@ -84,13 +94,20 @@ How to answer:
 - ${me.isManager ? 'You can see the whole organization.' : 'You only have this user\'s own records; if they ask about colleagues, explain that a manager can see that.'}
 - Reply in the same language and style as the user (English, Bengali, or Bengali written in English letters).
 - Be concise and direct: lead with the answer, then the key details. Plain text only: no markdown tables, no ** or #. Short "- " bullet lists are fine.
-- You can read data but cannot change it (approve leave, edit rosters, resolve issues, add staff). Say which page does it and offer to open it.
+- You can prepare changes, but a person must approve each one (see "Doing things"). Never say a change is done until the conversation shows it was approved and done.
 - Give practical advice when asked (e.g. Fair Work breaks, rest between shifts, how to cover a shift), based on the data and rules.
 
 Actions: when the user asks to open a page or change the theme, or when opening a page clearly helps, add ONE final line exactly like:
 ACTION: {"type":"navigate","path":"/leave"}
 ACTION: {"type":"theme","mode":"dark"}
 Pages this user can open: $pages. Mode is "light" or "dark".
+
+Doing things (human approval required): when the user asks you to change something, or agrees to a change you suggested, prepare it as a proposal. Each one appears as a card with Approve / Cancel; nothing happens until the user taps Approve. Write one sentence saying what you prepared and why, then put each proposal on its own line at the end, using the #id values from DATA without the "#":
+PROPOSE: {"type":"approve_leave","id":"1a2b3c4d"}
+PROPOSE: {"type":"add_shift","employee_id":"5e6f7a8b","start":"2026-11-03T09:00","end":"2026-11-03T17:00","site":"Oakleigh HQ"}
+Changes this user may prepare:
+${proposalTypesFor(me).map((t) => '- $t').join('\n')}
+For "all"/bulk requests, propose one card per record (at most 10). Check the data first (pending status, overlaps, rest gaps, leave clashes) and mention any concern. If something is not in this list (e.g. adding staff, editing settings), say which page does it. Earlier messages show "[User approved and it was done: ...]" or "[User declined: ...]" after each card.
 
 DATA
 $context''';
@@ -293,11 +310,13 @@ $context''';
   }
 }
 
-/// Splits a model reply into the text to show and an optional trailing
-/// `ACTION: {...}` instruction. Also accepts the older all-JSON reply format.
-({String text, Map<String, dynamic>? action}) parseAgentReply(String raw) {
+/// Splits a model reply into the text to show, an optional trailing
+/// `ACTION: {...}` instruction and any `PROPOSE: {...}` lines. Also accepts
+/// the older all-JSON reply format.
+({String text, Map<String, dynamic>? action, List<Map<String, dynamic>> proposals}) parseAgentReply(String raw) {
   var text = raw.trim();
   Map<String, dynamic>? action;
+  final proposals = <Map<String, dynamic>>[];
 
   // Older/smaller models sometimes answer with a JSON object only.
   if (text.startsWith('{') && text.endsWith('}')) {
@@ -305,8 +324,8 @@ $context''';
       final data = jsonDecode(text);
       if (data is Map<String, dynamic>) {
         final kind = data['action'];
-        if (kind == 'navigate') return (text: '', action: {'type': 'navigate', 'path': data['payload']});
-        if (kind == 'toggle_theme') return (text: '', action: {'type': 'theme', 'mode': data['payload']});
+        if (kind == 'navigate') return (text: '', action: {'type': 'navigate', 'path': data['payload']}, proposals: proposals);
+        if (kind == 'toggle_theme') return (text: '', action: {'type': 'theme', 'mode': data['payload']}, proposals: proposals);
         final reply = data['reply'] ?? data['payload'];
         if (reply is String) text = reply.trim();
       }
@@ -314,6 +333,17 @@ $context''';
       // Plain text that happens to start with a brace.
     }
   }
+
+  final proposeLine = RegExp(r'^\s*PROPOSE:\s*(\{.*\})\s*$', multiLine: true);
+  for (final m in proposeLine.allMatches(text)) {
+    try {
+      final data = jsonDecode(m.group(1)!);
+      if (data is Map<String, dynamic>) proposals.add(data);
+    } on FormatException {
+      // Skip a malformed proposal; the line is still hidden below.
+    }
+  }
+  text = text.replaceAll(proposeLine, '').trim();
 
   final match = RegExp(r'^\s*ACTION:\s*(\{.*\})\s*$', multiLine: true).allMatches(text).lastOrNull;
   if (match != null) {
@@ -328,5 +358,5 @@ $context''';
 
   // The chat panel shows plain text.
   text = text.replaceAll('**', '').replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '');
-  return (text: text, action: action);
+  return (text: text, action: action, proposals: proposals);
 }
