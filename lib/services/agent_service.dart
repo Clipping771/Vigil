@@ -1,13 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../models/employee.dart';
+import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
-import '../providers/exception_provider.dart';
-import '../providers/roster_provider.dart';
-import '../providers/staff_provider.dart';
+import '../widgets/app_shell.dart' show appDestinations, canAccessPath;
+import 'agent_context.dart';
 
 final agentServiceProvider = Provider((ref) => AgentService(ref));
 
@@ -18,56 +20,111 @@ class AgentUnavailable implements Exception {
   String toString() => message;
 }
 
+/// One turn of the conversation sent to the model.
+typedef AgentTurn = ({bool fromAgent, String text});
+
+/// How many earlier messages are sent with each question.
+const agentHistoryTurns = 12;
+
 class AgentService {
   final Ref _ref;
 
   AgentService(this._ref);
 
-  Future<String> executeCommand(String prompt, BuildContext context) async {
-    final systemPrompt = '''
-    You are Vigil AI, an intelligent workforce management assistant built into the 'Vigil' app.
-    Your job is to read the user's natural language command and convert it into a structured JSON object.
-    
-    Available Actions:
-    1. toggle_theme: Switch the app's theme. 
-       Payload MUST be exactly "light" or "dark".
-       
-    2. navigate: Go to a specific page.
-       Valid paths: "/dashboard", "/rosters", "/staff", "/leave", "/reports", "/settings"
-       
-    3. chat: General conversation or when no other action fits.
-       Payload: Your response text.
-       
-    4. check_exceptions: Ask about anomalies, warnings, or exceptions.
-       Payload: not needed.
-       
-    5. check_roster: Ask about schedules, shifts, or who is working.
-       Payload: not needed.
-       
-    6. list_staff: Ask for a list of employees or staff.
-       Payload: not needed.
-       
-    Respond ONLY with the JSON object. Do not wrap it in markdown block quotes like ```json.
-    ''';
+  /// Answers [prompt] from a fresh snapshot of the organization's data, with
+  /// the earlier conversation in [history]. Page and theme changes the model
+  /// asks for are carried out on [context].
+  Future<String> executeCommand(String prompt, BuildContext context, {List<AgentTurn> history = const []}) async {
+    final me = _ref.read(authProvider).currentUser;
+    if (me == null) return 'Please sign in first.';
 
     try {
-      final jsonResponseStr = await _callLLM(prompt, systemPrompt);
-      String cleanJson = jsonResponseStr.trim();
-      if (cleanJson.startsWith('```json')) {
-        cleanJson = cleanJson.substring(7, cleanJson.length - 3).trim();
-      } else if (cleanJson.startsWith('```')) {
-        cleanJson = cleanJson.substring(3, cleanJson.length - 3).trim();
-      }
+      final now = DateTime.now();
+      final data = await loadAgentData(me, now: now);
+      final system = _systemPrompt(me, formatAgentContext(me: me, data: data, settings: _ref.read(settingsProvider), now: now));
+      // Recent turns only, starting with a user message (Claude and Gemini require it).
+      final recent = history.length > agentHistoryTurns ? history.sublist(history.length - agentHistoryTurns) : history;
+      final turns = [...recent.skipWhile((t) => t.fromAgent), (fromAgent: false, text: prompt)];
+      final raw = await _callLLM(turns, system);
+      final error = _errorIn(raw);
+      if (error != null) return error;
 
-      final data = jsonDecode(cleanJson);
-      if (!context.mounted) return 'Action cancelled: the screen was closed.';
-      return await _handleAction(data, context);
+      final reply = parseAgentReply(raw);
+      var text = reply.text;
+      if (reply.action != null) {
+        if (!context.mounted) return text.isEmpty ? 'Action cancelled: the screen was closed.' : text;
+        final done = _runAction(reply.action!, me, context);
+        if (text.isEmpty) text = done;
+      }
+      return text.isEmpty ? "Sorry, I didn't get an answer. Please try rephrasing." : text;
+    } on TimeoutException {
+      return 'The AI service took too long to answer. Please try again.';
     } on http.ClientException catch (e) {
       debugPrint('Agent network error: $e');
       return "Couldn't reach the AI service. Check your connection and try again.";
     } catch (e) {
       debugPrint('Agent error: $e');
       return "Sorry, I couldn't process that request. Please try again.";
+    }
+  }
+
+  String _systemPrompt(Employee me, String context) {
+    final pages = [
+      for (final d in appDestinations)
+        if (d.visibleTo(me)) '${d.path} (${d.label})',
+    ].join(', ');
+    return '''
+You are Vigil AI, the assistant inside Vigil, a workforce attendance, rostering and compliance app.
+You are talking to ${me.fullName} (${me.role}).
+
+How to answer:
+- Answer from the DATA section below. It is live and was loaded just now. Use real names, dates, times and numbers.
+- Work things out yourself: count, add up hours, compare people, spot patterns, find who is late or missing, check rest gaps and leave clashes. Double-check arithmetic and dates against "Now".
+- If the data does not contain the answer (for example it is older than the window shown), say so plainly and say which page in the app has it. Never invent people, shifts or numbers.
+- ${me.isManager ? 'You can see the whole organization.' : 'You only have this user\'s own records; if they ask about colleagues, explain that a manager can see that.'}
+- Reply in the same language and style as the user (English, Bengali, or Bengali written in English letters).
+- Be concise and direct: lead with the answer, then the key details. Plain text only: no markdown tables, no ** or #. Short "- " bullet lists are fine.
+- You can read data but cannot change it (approve leave, edit rosters, resolve issues, add staff). Say which page does it and offer to open it.
+- Give practical advice when asked (e.g. Fair Work breaks, rest between shifts, how to cover a shift), based on the data and rules.
+
+Actions: when the user asks to open a page or change the theme, or when opening a page clearly helps, add ONE final line exactly like:
+ACTION: {"type":"navigate","path":"/leave"}
+ACTION: {"type":"theme","mode":"dark"}
+Pages this user can open: $pages. Mode is "light" or "dark".
+
+DATA
+$context''';
+  }
+
+  String _runAction(Map<String, dynamic> action, Employee me, BuildContext context) {
+    switch (action['type']) {
+      case 'theme':
+        final notifier = _ref.read(themeProvider.notifier);
+        final mode = '${action['mode'] ?? ''}'.toLowerCase();
+        if (mode == 'light' || mode == 'dark') {
+          notifier.setTheme(mode == 'light' ? AppTheme.light : AppTheme.dark);
+        } else {
+          notifier.toggle();
+        }
+        return 'Switched to ${_ref.read(themeProvider).currentTheme.label.toLowerCase()} mode.';
+      case 'navigate':
+        final path = '${action['path'] ?? ''}';
+        final known = appDestinations.any((d) => d.path == path);
+        if (!known || !canAccessPath(me, path)) return "I can't open that page for you.";
+        context.go(path);
+        return 'Opening ${appDestinations.firstWhere((d) => d.path == path).label}.';
+      default:
+        return '';
+    }
+  }
+
+  /// Returns the readable message when [raw] is our error envelope.
+  String? _errorIn(String raw) {
+    if (!raw.trimLeft().startsWith('{"action":"error"')) return null;
+    try {
+      return '${jsonDecode(raw)['payload']}';
+    } on FormatException {
+      return null;
     }
   }
 
@@ -85,15 +142,9 @@ class AgentService {
         'Do not invent facts that are not in the exception. Plain text only.';
     final prompt = 'Exception type: $type\nSeverity: $severity\n'
         'Employee: ${employeeName ?? 'unknown'}\nDetails: $description';
-    final text = (await _callLLM(prompt, system)).trim();
-    if (text.startsWith('{')) {
-      try {
-        final data = jsonDecode(text);
-        if (data is Map && data['action'] == 'error') throw AgentUnavailable(data['payload'].toString());
-      } on FormatException {
-        // Model returned JSON-looking text; fall through and show it.
-      }
-    }
+    final text = (await _callLLM([(fromAgent: false, text: prompt)], system)).trim();
+    final error = _errorIn(text);
+    if (error != null) throw AgentUnavailable(error);
     return text;
   }
 
@@ -112,31 +163,31 @@ class AgentService {
     final watch = Stopwatch()..start();
     final String text;
     try {
-      text = (await _callLLM('Reply with the single word OK.', 'You are a connectivity check. Answer in one word.')).trim();
+      text = (await _callLLM([(fromAgent: false, text: 'Reply with the single word OK.')], 'You are a connectivity check. Answer in one word.')).trim();
     } on http.ClientException {
       throw const AgentUnavailable("Couldn't reach the AI service. Check your internet connection.");
+    } on TimeoutException {
+      throw const AgentUnavailable('The AI service did not answer in time.');
     }
     watch.stop();
-    if (text.startsWith('{')) {
-      try {
-        final data = jsonDecode(text);
-        if (data is Map && data['action'] == 'error') throw AgentUnavailable(data['payload'].toString());
-      } on FormatException {
-        // Not our error envelope.
-      }
-    }
+    final error = _errorIn(text);
+    if (error != null) throw AgentUnavailable(error);
     if (text.isEmpty) throw const AgentUnavailable('The model returned an empty reply.');
     final secs = (watch.elapsedMilliseconds / 1000).toStringAsFixed(1);
     return 'Connected to ${settings.aiProvider == 'ChatGPT' ? 'OpenAI' : settings.aiProvider} · ${settings.activeModel} replied in ${secs}s.';
   }
 
-  Future<String> _callLLM(String prompt, String systemPrompt) async {
+  Future<String> _callLLM(List<AgentTurn> turns, String systemPrompt) async {
     final settings = _ref.read(settingsProvider);
     final apiKey = settings.activeApiKey;
     final model = settings.activeModel;
     if (settings.needsApiKey && apiKey.isEmpty) {
       return jsonEncode({'action': 'error', 'payload': 'Add your ${settings.aiProvider} API key in Settings → AI Assistant to use Vigil AI.'});
     }
+    List<Map<String, String>> chat() => [
+          for (final t in turns) {'role': t.fromAgent ? 'assistant' : 'user', 'content': t.text},
+        ];
+    const timeout = Duration(seconds: 90);
 
     late final http.Response response;
     switch (settings.aiProvider) {
@@ -149,13 +200,15 @@ class AgentService {
                 body: jsonEncode({
                   'model': model,
                   'stream': false,
+                  // Room for the data snapshot; Ollama's default context is small.
+                  'options': {'num_ctx': 32768},
                   'messages': [
                     {'role': 'system', 'content': systemPrompt},
-                    {'role': 'user', 'content': prompt}
+                    ...chat(),
                   ],
                 }),
               )
-              .timeout(const Duration(seconds: 120));
+              .timeout(const Duration(seconds: 180));
         } catch (_) {
           return jsonEncode({'action': 'error', 'payload': ollamaUnreachableMessage(settings.ollamaUrl)});
         }
@@ -163,56 +216,66 @@ class AgentService {
           return jsonDecode(response.body)['message']['content'];
         }
       case 'ChatGPT':
-        response = await http.post(
-          Uri.parse('https://api.openai.com/v1/chat/completions'),
-          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $apiKey'},
-          body: jsonEncode({
-            'model': model,
-            'messages': [
-              {'role': 'system', 'content': systemPrompt},
-              {'role': 'user', 'content': prompt}
-            ]
-          }),
-        );
+        response = await http
+            .post(
+              Uri.parse('https://api.openai.com/v1/chat/completions'),
+              headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $apiKey'},
+              body: jsonEncode({
+                'model': model,
+                'messages': [
+                  {'role': 'system', 'content': systemPrompt},
+                  ...chat(),
+                ]
+              }),
+            )
+            .timeout(timeout);
         if (response.statusCode == 200) {
           return jsonDecode(response.body)['choices'][0]['message']['content'];
         }
       case 'Claude':
-        response = await http.post(
-          Uri.parse('https://api.anthropic.com/v1/messages'),
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: jsonEncode({
-            'model': model,
-            'max_tokens': 1024,
-            'system': systemPrompt,
-            'messages': [
-              {'role': 'user', 'content': prompt}
-            ]
-          }),
-        );
+        response = await http
+            .post(
+              Uri.parse('https://api.anthropic.com/v1/messages'),
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true',
+              },
+              body: jsonEncode({
+                'model': model,
+                'max_tokens': 4096,
+                'system': systemPrompt,
+                'messages': chat(),
+              }),
+            )
+            .timeout(timeout);
         if (response.statusCode == 200) {
-          return jsonDecode(response.body)['content'][0]['text'];
+          final blocks = jsonDecode(response.body)['content'] as List;
+          return blocks.where((b) => b['type'] == 'text').map((b) => b['text']).join();
         }
       default:
-        response = await http.post(
-          Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent'),
-          headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},
-          body: jsonEncode({
-            'system_instruction': {
-              'parts': {'text': systemPrompt}
-            },
-            'contents': [
-              {'parts': [{'text': prompt}]}
-            ],
-          }),
-        );
+        response = await http
+            .post(
+              Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent'),
+              headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},
+              body: jsonEncode({
+                'system_instruction': {
+                  'parts': {'text': systemPrompt}
+                },
+                'contents': [
+                  for (final t in turns)
+                    {
+                      'role': t.fromAgent ? 'model' : 'user',
+                      'parts': [{'text': t.text}]
+                    },
+                ],
+              }),
+            )
+            .timeout(timeout);
         if (response.statusCode == 200) {
-          return jsonDecode(response.body)['candidates'][0]['content']['parts'][0]['text'];
+          final parts = jsonDecode(response.body)['candidates'][0]['content']['parts'] as List;
+          return parts.map((p) => p['text'] ?? '').join();
         }
     }
 
@@ -222,89 +285,48 @@ class AgentService {
       404 => settings.aiProvider == 'Ollama'
           ? 'model "$model" is not installed (run: ollama pull $model)'
           : 'model "$model" is not available',
+      413 => 'the request was too large for this model',
       429 => 'the rate limit was reached',
       _ => 'the service returned an error (${response.statusCode})',
     };
     return jsonEncode({'action': 'error', 'payload': 'Vigil AI could not respond: $reason.'});
   }
+}
 
-  Future<String> _handleAction(Map<String, dynamic> data, BuildContext context) async {
-    final action = data['action'];
-    final payload = data['payload'];
+/// Splits a model reply into the text to show and an optional trailing
+/// `ACTION: {...}` instruction. Also accepts the older all-JSON reply format.
+({String text, Map<String, dynamic>? action}) parseAgentReply(String raw) {
+  var text = raw.trim();
+  Map<String, dynamic>? action;
 
-    switch (action) {
-      case 'toggle_theme':
-        final themeStr = payload?.toString().toLowerCase() ?? '';
-        final notifier = _ref.read(themeProvider.notifier);
-        if (themeStr.contains('light')) {
-          notifier.setTheme(AppTheme.light);
-          return "Switched to light mode.";
-        } else if (themeStr.contains('dark')) {
-          notifier.setTheme(AppTheme.dark);
-          return "Switched to dark mode.";
-        }
-        notifier.toggle();
-        return "Switched to ${_ref.read(themeProvider).currentTheme.label.toLowerCase()} mode.";
-
-      case 'navigate':
-        const allowedPaths = {'/dashboard', '/rosters', '/staff', '/leave', '/reports', '/settings', '/geofence'};
-        if (payload is! String || !allowedPaths.contains(payload)) {
-          return "I can't navigate there.";
-        }
-        try {
-          context.go(payload);
-          return "Navigating you to $payload.";
-        } catch (e) {
-          return "I can't seem to navigate there.";
-        }
-
-      case 'chat':
-        return payload?.toString() ?? "Hello!";
-
-      case 'check_exceptions':
-        try {
-          final exceptionsAsync = _ref.read(exceptionStreamProvider);
-          final exceptions = exceptionsAsync.value ?? [];
-          final pending = exceptions.where((e) => e.status == 'pending').toList();
-          
-          if (pending.isEmpty) {
-            return "Great news! There are no pending exceptions right now.";
-          } else {
-            return "You have ${pending.length} pending exceptions requiring attention. Would you like me to navigate to the dashboard to see them?";
-          }
-        } catch (e) {
-          return "Failed to load exceptions: $e";
-        }
-
-      case 'check_roster':
-        try {
-          final shifts = await _ref.read(rosterProvider.future);
-          if (shifts.isEmpty) {
-            return "There are no shifts scheduled at the moment.";
-          } else {
-            return "I found ${shifts.length} total shifts in the system. Go to the Rosters page for details.";
-          }
-        } catch (e) {
-          return "Failed to load roster: $e";
-        }
-
-      case 'list_staff':
-        try {
-          final staff = await _ref.read(staffProvider.future);
-          if (staff.isEmpty) {
-            return "No staff members found.";
-          } else {
-            final names = staff.take(5).map((e) => e.fullName).join(', ');
-            final extra = staff.length > 5 ? " and ${staff.length - 5} more." : ".";
-            return "Here are some of your staff members: $names$extra";
-          }
-        } catch (e) {
-          return "Failed to load staff list: $e";
-        }
-
-      case 'error':
-      default:
-        return payload?.toString() ?? "I'm not sure how to handle that request.";
+  // Older/smaller models sometimes answer with a JSON object only.
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      final data = jsonDecode(text);
+      if (data is Map<String, dynamic>) {
+        final kind = data['action'];
+        if (kind == 'navigate') return (text: '', action: {'type': 'navigate', 'path': data['payload']});
+        if (kind == 'toggle_theme') return (text: '', action: {'type': 'theme', 'mode': data['payload']});
+        final reply = data['reply'] ?? data['payload'];
+        if (reply is String) text = reply.trim();
+      }
+    } on FormatException {
+      // Plain text that happens to start with a brace.
     }
   }
+
+  final match = RegExp(r'^\s*ACTION:\s*(\{.*\})\s*$', multiLine: true).allMatches(text).lastOrNull;
+  if (match != null) {
+    try {
+      final data = jsonDecode(match.group(1)!);
+      if (data is Map<String, dynamic>) action = data;
+    } on FormatException {
+      // Ignore a malformed action line but still hide it.
+    }
+    text = text.replaceRange(match.start, match.end, '').trim();
+  }
+
+  // The chat panel shows plain text.
+  text = text.replaceAll('**', '').replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '');
+  return (text: text, action: action);
 }

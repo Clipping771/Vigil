@@ -1,7 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vigil/models/employee.dart';
+import 'package:vigil/models/clock_event.dart';
 import 'package:vigil/models/exception_record.dart';
 import 'package:vigil/models/shift.dart';
+import 'package:vigil/providers/settings_provider.dart';
+import 'package:vigil/services/agent_context.dart';
+import 'package:vigil/services/agent_service.dart';
 import 'package:vigil/services/exception_engine.dart';
 import 'package:vigil/services/reporting_engine.dart';
 import 'package:vigil/widgets/app_shell.dart';
@@ -116,6 +120,60 @@ void main() {
         ),
       ], organizationName: 'Org', period: '2 Oct 2026 – 1 Nov 2026');
       expect(String.fromCharCodes(bytes), contains('Roboto'));
+    });
+  });
+
+  group('Vigil AI', () {
+    ClockEvent punch(String emp, String type, DateTime at) => ClockEvent(
+        id: '$emp-$type-$at', organizationId: 'org-1', employeeId: emp, eventType: type, eventTime: at, isGeofenced: true, createdAt: at);
+
+    test('reply parser separates the action line and strips markdown', () {
+      final r = parseAgentReply('**Bob** is on shift.\nACTION: {"type":"navigate","path":"/rosters"}');
+      expect(r.text, 'Bob is on shift.');
+      expect(r.action, {'type': 'navigate', 'path': '/rosters'});
+      expect(parseAgentReply('Just text').action, isNull);
+      final legacy = parseAgentReply('{"action":"toggle_theme","payload":"dark"}');
+      expect(legacy.action, {'type': 'theme', 'mode': 'dark'});
+      expect(parseAgentReply('{"action":"chat","payload":"Hello"}').text, 'Hello');
+    });
+
+    test('context includes live status, hours worked and shifts from real data', () {
+      final now = DateTime(2026, 11, 2, 12);
+      final manager = _employee('manager');
+      final bob = _employee('staff');
+      final text = formatAgentContext(
+        me: manager,
+        settings: const AppSettings(),
+        now: now,
+        data: AgentData(
+          organizationName: 'Acme',
+          employees: [manager, bob],
+          shifts: [_shift('s1', bob.id, DateTime(2026, 11, 2, 9), DateTime(2026, 11, 2, 17))],
+          events: [
+            punch(bob.id, 'clock_in', DateTime(2026, 11, 1, 9)),
+            punch(bob.id, 'clock_out', DateTime(2026, 11, 1, 17)),
+            punch(bob.id, 'clock_in', DateTime(2026, 11, 2, 9)),
+          ],
+          breaks: [
+            {'employee_id': bob.id, 'start_time': DateTime(2026, 11, 1, 12).toIso8601String(),
+             'end_time': DateTime(2026, 11, 1, 12, 30).toIso8601String(), 'duration_minutes': 30},
+          ],
+        ),
+      );
+      expect(text, contains('Organization: Acme'));
+      expect(text, contains('Test staff | CLOCKED IN'));
+      expect(text, contains('Not clocked in: Test manager'));
+      expect(text, contains('breaks 30m | worked 7h30m')); // 1 Nov: 8h minus 30 min break
+      expect(text, contains('Test staff | 10h30m')); // 7h30m + 3h so far today
+      expect(text, contains('(TODAY) | 09:00-17:00 (8h00m) | Test staff | Site | IN PROGRESS'));
+    });
+
+    test('staff context says it is limited to their own records', () {
+      final staff = _employee('staff');
+      final text = formatAgentContext(
+          me: staff, settings: const AppSettings(), now: DateTime(2026, 11, 2), data: AgentData(organizationName: 'Acme', employees: [staff]));
+      expect(text, contains("only this user's own records"));
+      expect(text, isNot(contains('## Staff')));
     });
   });
 

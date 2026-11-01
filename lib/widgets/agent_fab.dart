@@ -8,8 +8,9 @@ typedef ChatMessage = ({bool fromAgent, String text});
 final agentMessagesProvider = StateProvider<List<ChatMessage>>((ref) => [
       (
         fromAgent: true,
-        text: 'Hi, I am Vigil AI. Try "switch to dark mode", "who is rostered?" or "open leave". '
-            'Add your API key in Settings first.',
+        text: 'Hi, I am Vigil AI. I can see your live rosters, attendance, issues and leave. '
+            'Ask me things like "who is late today?", "how many hours did Bob work this week?" or '
+            '"any rest breaches next week?". Add your API key in Settings first.',
       ),
     ]);
 
@@ -58,6 +59,7 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
     final text = (preset ?? _controller.text).trim();
     if (text.isEmpty || _loading) return;
     final messages = ref.read(agentMessagesProvider.notifier);
+    final history = messages.state.skip(1).toList(); // Without the greeting.
     messages.state = [...messages.state, (fromAgent: false, text: text)];
     setState(() => _loading = true);
     _controller.clear();
@@ -65,7 +67,7 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
 
     // Navigation commands should act on the page behind this dialog.
     final pageContext = Navigator.of(context).context;
-    final reply = await ref.read(agentServiceProvider).executeCommand(text, pageContext);
+    final reply = await ref.read(agentServiceProvider).executeCommand(text, pageContext, history: history);
     messages.state = [...messages.state, (fromAgent: true, text: reply)];
     if (!mounted) return;
     setState(() => _loading = false);
@@ -103,6 +105,12 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
                   Icon(Icons.auto_awesome, color: cs.primary),
                   const SizedBox(width: 12),
                   Expanded(child: Text('Vigil AI', style: t.titleMedium)),
+                  if (messages.length > 1)
+                    IconButton(
+                      tooltip: 'New chat',
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _loading ? null : () => ref.invalidate(agentMessagesProvider),
+                    ),
                   IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                 ],
               ),
@@ -139,7 +147,7 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
                           bottomRight: Radius.circular(m.fromAgent ? 18 : 4),
                         ),
                       ),
-                      child: Text(m.text, style: t.bodyMedium?.copyWith(color: m.fromAgent ? cs.onSurface : cs.onPrimary)),
+                      child: SelectableText(m.text, style: t.bodyMedium?.copyWith(color: m.fromAgent ? cs.onSurface : cs.onPrimary)),
                     ),
                   );
                 },
@@ -152,7 +160,7 @@ class _AgentChatPanelState extends ConsumerState<AgentChatPanel> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final s in const ['Who is rostered?', 'Any open issues?', 'Switch to dark mode'])
+                    for (final s in const ['Who is working right now?', 'Any open issues?', "Who's rostered tomorrow?", 'Hours worked this week'])
                       ActionChip(label: Text(s), onPressed: () => _send(s)),
                   ],
                 ),
