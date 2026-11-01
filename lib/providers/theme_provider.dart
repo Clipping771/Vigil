@@ -54,6 +54,30 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
   void toggle() => setTheme(state.isDark ? AppTheme.light : AppTheme.dark);
 }
 
+/// How strongly the app's colours signal open compliance issues.
+enum ComplianceAlert { none, warning, danger }
+
+/// Whether open compliance issues may recolour the app (saved on this device).
+final complianceColorsProvider = StateNotifierProvider<ComplianceColorsNotifier, bool>((ref) => ComplianceColorsNotifier());
+
+class ComplianceColorsNotifier extends StateNotifier<bool> {
+  static const _prefsKey = 'compliance_colors';
+
+  ComplianceColorsNotifier() : super(true) {
+    SharedPreferences.getInstance().then((p) {
+      final saved = p.getBool(_prefsKey);
+      if (saved != null && mounted) state = saved;
+    }).catchError((_) {
+      // Preferences unavailable — keep the default (on).
+    });
+  }
+
+  void set(bool enabled) {
+    state = enabled;
+    SharedPreferences.getInstance().then((p) => p.setBool(_prefsKey, enabled)).ignore();
+  }
+}
+
 // ==========================================
 // MATERIAL 3 THEME
 // ==========================================
@@ -117,13 +141,16 @@ class StatusColors extends ThemeExtension<StatusColors> {
   StatusColors lerp(ThemeExtension<StatusColors>? other, double t) => t < 0.5 ? this : (other as StatusColors? ?? this);
 }
 
-ThemeData buildAppTheme(AppTheme theme) {
+/// Builds the app theme. With an [alert], the accent colours, navigation
+/// highlight and app bar shift to amber (warning) or red (danger) so people
+/// notice open compliance issues; surfaces and text keep their contrast.
+ThemeData buildAppTheme(AppTheme theme, {ComplianceAlert alert = ComplianceAlert.none}) {
   final isDark = theme == AppTheme.dark;
   final brightness = isDark ? Brightness.dark : Brightness.light;
   final generated = ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
   // Light mode is pure white everywhere (no tinted grey surfaces); dark mode
   // uses Google's neutral dark surfaces.
-  final scheme = isDark
+  final normal = isDark
       ? generated.copyWith(
           primary: const Color(0xFF8AB4F8),
           onPrimary: const Color(0xFF062E6F),
@@ -163,6 +190,30 @@ ThemeData buildAppTheme(AppTheme theme) {
           surfaceTint: Colors.transparent,
           error: const Color(0xFFD93025),
         );
+  final status = isDark ? StatusColors.dark : StatusColors.light;
+  final scheme = switch (alert) {
+    ComplianceAlert.none => normal,
+    ComplianceAlert.warning => normal.copyWith(
+        primary: status.warning,
+        onPrimary: status.onWarning,
+        primaryContainer: status.warningContainer,
+        onPrimaryContainer: status.onWarningContainer,
+        secondaryContainer: status.warningContainer,
+        onSecondaryContainer: status.onWarningContainer,
+      ),
+    ComplianceAlert.danger => normal.copyWith(
+        primary: normal.error,
+        onPrimary: normal.onError,
+        primaryContainer: normal.errorContainer,
+        onPrimaryContainer: normal.onErrorContainer,
+        secondaryContainer: normal.errorContainer,
+        onSecondaryContainer: normal.onErrorContainer,
+      ),
+  };
+  // A light wash of the alert colour on the app bar.
+  final appBarColor = alert == ComplianceAlert.none
+      ? scheme.surface
+      : Color.lerp(scheme.surface, scheme.primaryContainer, isDark ? 0.45 : 0.6)!;
   final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: brightness);
   final textTheme = GoogleFonts.robotoTextTheme(base.textTheme).apply(
     bodyColor: scheme.onSurface,
@@ -173,9 +224,9 @@ ThemeData buildAppTheme(AppTheme theme) {
   return base.copyWith(
     scaffoldBackgroundColor: scheme.surface,
     textTheme: textTheme,
-    extensions: [theme == AppTheme.dark ? StatusColors.dark : StatusColors.light],
+    extensions: [status],
     appBarTheme: AppBarTheme(
-      backgroundColor: scheme.surface,
+      backgroundColor: appBarColor,
       foregroundColor: scheme.onSurface,
       surfaceTintColor: scheme.surfaceTint,
       elevation: 0,

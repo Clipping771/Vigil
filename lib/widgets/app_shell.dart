@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/employee.dart';
 import '../providers/auth_provider.dart';
+import '../providers/compliance_alert_provider.dart';
 import '../providers/theme_provider.dart';
 
 class NavDestination {
@@ -77,13 +78,14 @@ class AppShell extends ConsumerWidget {
     final isWide = MediaQuery.sizeOf(context).width >= wideBreakpoint;
 
     final sidebar = _Sidebar(user: user, destinations: destinations, location: location);
+    final page = _WithComplianceBanner(user: user, child: child);
 
     if (isWide) {
       return Scaffold(
         body: Row(
           children: [
             SizedBox(width: 256, child: sidebar),
-            Expanded(child: child),
+            Expanded(child: page),
           ],
         ),
       );
@@ -92,7 +94,76 @@ class AppShell extends ConsumerWidget {
     return Scaffold(
       key: _shellScaffoldKey,
       drawer: Drawer(width: 280, child: SafeArea(child: sidebar)),
-      body: child,
+      body: page,
+    );
+  }
+}
+
+/// Shows a banner above the page while compliance issues are open, so people
+/// notice them on every screen (the theme also shifts colour, see
+/// [appThemeProvider]). It can be dismissed until the set of issues changes.
+class _WithComplianceBanner extends ConsumerWidget {
+  final Employee user;
+  final Widget child;
+  const _WithComplianceBanner({required this.user, required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final alert = ref.watch(complianceAlertProvider);
+    final dismissed = ref.watch(dismissedComplianceBannerProvider);
+    final show = alert.open.isNotEmpty && dismissed != alert.key;
+
+    final cs = Theme.of(context).colorScheme;
+    final status = Theme.of(context).extension<StatusColors>()!;
+    final danger = alert.level == ComplianceAlert.danger;
+    final bg = danger ? cs.errorContainer : status.warningContainer;
+    final fg = danger ? cs.onErrorContainer : status.onWarningContainer;
+    final n = alert.open.length;
+    final issues = '$n compliance issue${n == 1 ? '' : 's'}';
+    final message = user.isManager
+        ? '$issues need${n == 1 ? 's' : ''} review${alert.serious > 0 ? ' · ${alert.serious} high priority' : ''}'
+        : 'You have $issues on your record${n == 1 ? ': ${alert.open.first.typeTitle}' : ''}';
+
+    return Column(
+      children: [
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          child: !show
+              ? const SizedBox(width: double.infinity)
+              : Material(
+                  color: bg,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
+                      child: Row(
+                        children: [
+                          Icon(danger ? Icons.report_outlined : Icons.warning_amber_rounded, color: fg, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(message, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w500)),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(foregroundColor: fg),
+                            onPressed: () => context.go('/dashboard'),
+                            child: Text(user.isManager ? 'Review' : 'View'),
+                          ),
+                          IconButton(
+                            tooltip: 'Hide until something changes',
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(Icons.close, color: fg, size: 18),
+                            onPressed: () => ref.read(dismissedComplianceBannerProvider.notifier).state = alert.key,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+        // The banner already covers the status bar area.
+        Expanded(child: show ? MediaQuery.removePadding(context: context, removeTop: true, child: child) : child),
+      ],
     );
   }
 }

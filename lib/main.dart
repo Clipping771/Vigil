@@ -19,6 +19,7 @@ import 'screens/geofence_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'providers/auth_provider.dart';
+import 'providers/compliance_alert_provider.dart';
 import 'providers/theme_provider.dart';
 import 'widgets/app_shell.dart';
 
@@ -125,12 +126,14 @@ class VigilApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(goRouterProvider);
-    final themeState = ref.watch(themeProvider);
 
     return MaterialApp.router(
       title: 'Vigil — Workforce Compliance',
       debugShowCheckedModeBanner: false,
-      theme: themeState.themeData,
+      theme: ref.watch(appThemeProvider),
+      // Compliance alerts fade the colours in and out rather than snapping.
+      themeAnimationDuration: const Duration(milliseconds: 700),
+      themeAnimationCurve: Curves.easeInOut,
       routerConfig: router,
     );
   }

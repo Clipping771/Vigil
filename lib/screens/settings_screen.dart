@@ -133,16 +133,27 @@ class _AppearanceSection extends ConsumerWidget {
     return _Section(
       title: 'Appearance',
       subtitle: 'Saved on this device.',
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SegmentedButton<AppTheme>(
-          showSelectedIcon: false,
-          segments: [
-            for (final t in AppTheme.values) ButtonSegment(value: t, icon: Icon(t.icon), label: Text(t.label)),
-          ],
-          selected: {current},
-          onSelectionChanged: (s) => ref.read(themeProvider.notifier).setTheme(s.first),
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: SegmentedButton<AppTheme>(
+              showSelectedIcon: false,
+              segments: [
+                for (final t in AppTheme.values) ButtonSegment(value: t, icon: Icon(t.icon), label: Text(t.label)),
+              ],
+              selected: {current},
+              onSelectionChanged: (s) => ref.read(themeProvider.notifier).setTheme(s.first),
+            ),
+          ),
+          SwitchListTile(
+            value: ref.watch(complianceColorsProvider),
+            onChanged: ref.read(complianceColorsProvider.notifier).set,
+            title: const Text('Compliance alert colours'),
+            subtitle: const Text('Turn the app amber or red while compliance issues are open. The banner still shows.'),
+          ),
+        ],
       ),
     );
   }
