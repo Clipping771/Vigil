@@ -271,7 +271,7 @@ class _AiSectionState extends ConsumerState<_AiSection> {
       title: 'AI assistant',
       subtitle: isOllama
           ? 'Runs on your own computer with Ollama — free, private, no API key.'
-          : 'Bring your own API key. It is stored only on this device and sent directly to the provider.',
+          : 'Bring your own API key. It stays only on this device until you sign out, and is sent directly to the provider.',
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(

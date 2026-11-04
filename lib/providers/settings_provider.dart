@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/ai_key_store.dart';
 import 'auth_provider.dart';
 
 /// Default model per provider, used until the user fetches and picks one.
@@ -28,7 +29,7 @@ class AppSettings {
   final String? deliveryEmail;
   final bool isSaving;
 
-  // AI assistant (bring-your-own-key, stored only on this device).
+  // AI assistant (bring-your-own-key, stored only on this device until sign-out).
   final String aiProvider;
   final String geminiApiKey;
   final String chatGptApiKey;
@@ -106,28 +107,29 @@ class AppSettings {
 }
 
 class SettingsNotifier extends StateNotifier<AppSettings> {
-  SettingsNotifier(this._organizationId) : super(const AppSettings()) {
+  SettingsNotifier(this._organizationId, this._userId) : super(const AppSettings()) {
     _loadLocal();
     _loadOrganizationSettings();
   }
 
   final String? _organizationId;
+  final String? _userId;
   final _supabase = Supabase.instance.client;
 
   static const _kProvider = 'ai_provider';
   static const _kModel = 'ai_model';
   static const _kOllamaUrl = 'ollama_url';
-  static String _keyFor(String provider) => 'ai_key_${provider.toLowerCase()}';
 
   Future<void> _loadLocal() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final keys = _userId == null ? const <String, String>{} : await AiKeyStore.load(_userId);
       if (!mounted) return;
       state = state.copyWith(
         aiProvider: prefs.getString(_kProvider) ?? state.aiProvider,
-        geminiApiKey: prefs.getString(_keyFor('Gemini')) ?? '',
-        chatGptApiKey: prefs.getString(_keyFor('ChatGPT')) ?? '',
-        claudeApiKey: prefs.getString(_keyFor('Claude')) ?? '',
+        geminiApiKey: keys['Gemini'] ?? '',
+        chatGptApiKey: keys['ChatGPT'] ?? '',
+        claudeApiKey: keys['Claude'] ?? '',
         ollamaBaseUrl: prefs.getString(_kOllamaUrl) ?? defaultOllamaUrl,
         selectedModel: () => prefs.getString(_kModel),
       );
@@ -219,8 +221,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       'Claude' => state.copyWith(claudeApiKey: trimmed),
       _ => state.copyWith(geminiApiKey: trimmed),
     };
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyFor(state.aiProvider), trimmed);
+    if (_userId != null) await AiKeyStore.save(_userId, state.aiProvider, trimmed);
   }
 
   Future<void> updateOllamaUrl(String url) async {
@@ -310,7 +311,9 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {
   final orgId = ref.watch(authProvider.select((s) => s.currentUser?.organizationId));
-  return SettingsNotifier(orgId);
+  // Rebuilt for each user, so one person's keys never stay in memory for the next.
+  final userId = ref.watch(authProvider.select((s) => s.currentUser?.id));
+  return SettingsNotifier(orgId, userId);
 });
 
 /// Explains the usual reasons a browser cannot reach a local Ollama server.

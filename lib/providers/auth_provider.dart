@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/employee.dart';
+import '../services/ai_key_store.dart';
 
 class AuthState {
   final Employee? currentUser;
@@ -45,6 +46,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _authSub = _supabase.auth.onAuthStateChange.listen((data) async {
       switch (data.event) {
         case AuthChangeEvent.signedOut:
+          // Also covers sessions ended elsewhere or that can no longer refresh.
+          await AiKeyStore.clear();
           state = const AuthState(initialized: true);
         case AuthChangeEvent.passwordRecovery:
           await _bootstrap(passwordRecovery: true);
@@ -169,6 +172,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     try {
+      // First, so the keys go even if the sign-out request fails.
+      await AiKeyStore.clear();
       await _supabase.auth.signOut();
     } catch (e) {
       debugPrint('Sign-out error: $e');
