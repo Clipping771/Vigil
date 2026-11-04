@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vigil/models/employee.dart';
 import 'package:vigil/models/clock_event.dart';
 import 'package:vigil/models/exception_record.dart';
+import 'package:vigil/models/geofence_zone.dart';
 import 'package:vigil/models/leave_request.dart';
 import 'package:vigil/models/shift.dart';
 import 'package:vigil/providers/settings_provider.dart';
@@ -234,6 +235,19 @@ void main() {
       expect(validateNewPassword('short1'), isNotNull);
       expect(validateNewPassword('longpassword'), isNotNull);
       expect(validateNewPassword('correct horse 9'), isNull);
+    });
+  });
+
+  group('Site QR codes', () {
+    test('carry the zone and its secret', () {
+      expect(siteQrPayload('zone-1', 'secret'), 'vigil:site:zone-1:secret');
+    });
+
+    test('old and current codes match their own zone only', () {
+      expect(isSiteQrFor('vigil:site:zone-1:secret', 'zone-1'), isTrue);
+      expect(isSiteQrFor('vigil:site:zone-1', 'zone-1'), isTrue);
+      expect(isSiteQrFor('vigil:site:zone-12:secret', 'zone-1'), isFalse);
+      expect(isSiteQrFor('something else', 'zone-1'), isFalse);
     });
   });
 }

@@ -26,9 +26,10 @@ Fresh project:
 4. `database/migrations/003_exception_review.sql` — who reviewed each issue, audit log, staff see only their own issues
 5. `database/migrations/004_admin_founder.sql` — converts legacy owners to admins; other admins cannot demote or remove the workspace founder
 6. `database/migrations/005_break_rules.sql` — allows the excessive-breaks issue type
-7. `database/enable_realtime.sql`
+7. `database/migrations/006_punch_integrity.sql` — the database sets punch and break times and checks location; staff see only their own punches. Site QR codes printed earlier stop working, so print them again from **Work sites**
+8. `database/enable_realtime.sql`
 
-Existing database: run the migrations in order (each is idempotent and safe to re-run), then `enable_realtime.sql`.
+Existing database: run the migrations in order (each is idempotent and safe to re-run), then `enable_realtime.sql`. Run them before deploying the app.
 
 In **Auth → URL configuration**, set the Site URL to your deployed web origin so confirmation and password-reset links return to the app.
 
@@ -78,9 +79,11 @@ psql -d vigil_test -f database/migrations/002_exception_rules.sql
 psql -d vigil_test -f database/migrations/003_exception_review.sql
 psql -d vigil_test -f database/migrations/004_admin_founder.sql
 psql -d vigil_test -f database/migrations/005_break_rules.sql
+psql -d vigil_test -f database/migrations/006_punch_integrity.sql
 psql -d vigil_test -f database/tests/rls_tests.sql   # prints PASS/FAIL per scenario
 psql -d vigil_test -f database/tests/exception_rules_tests.sql
 psql -d vigil_test -f database/tests/exception_review_tests.sql
+psql -d vigil_test -f database/tests/punch_integrity_tests.sql
 ```
 
 Preview the signed-in app with sample data (no backend):

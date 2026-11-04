@@ -114,11 +114,11 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
           confirmLabel: 'Clock in anyway',
         );
         if (!proceed) return;
-        await _record('clock_in', position.latitude, position.longitude, false, 'Clocked in. Flagged for manager review.');
+        await _record('clock_in', 'Clocked in. Flagged for manager review.', lat: position.latitude, lng: position.longitude);
         return;
       }
 
-      await _record('clock_in', position.latitude, position.longitude, true, 'Clocked in at $zoneName.');
+      await _record('clock_in', 'Clocked in at $zoneName.', lat: position.latitude, lng: position.longitude);
     } catch (_) {
       if (mounted) showMessage(context, 'Could not get your location. Try again.');
     } finally {
@@ -133,26 +133,24 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
     setState(() => _busy = true);
     try {
       double? lat, lng;
-      var inside = false;
       try {
         if (await Geolocator.isLocationServiceEnabled()) {
           final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(timeLimit: Duration(seconds: 8)));
           lat = pos.latitude;
           lng = pos.longitude;
-          inside = (await _matchZone(pos)).$1;
         }
       } catch (_) {
         // Clock-out still proceeds without a location fix.
       }
-      await _record('clock_out', lat, lng, inside, 'Clocked out. See you next time!');
+      await _record('clock_out', 'Clocked out. See you next time!', lat: lat, lng: lng);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _record(String type, double? lat, double? lng, bool geofenced, String success) async {
+  Future<void> _record(String type, String success, {double? lat, double? lng, String? siteCode}) async {
     try {
-      await ref.read(clockServiceProvider).recordClockEvent(type, latitude: lat, longitude: lng, isGeofenced: geofenced);
+      await ref.read(clockServiceProvider).recordClockEvent(type, latitude: lat, longitude: lng, siteCode: siteCode);
       if (mounted) showMessage(context, success);
     } on ClockStateException catch (e) {
       if (mounted) showMessage(context, e.message);
@@ -196,12 +194,12 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                 handled = true;
                 Navigator.pop(ctx);
                 final zones = await ref.read(geofenceProvider.future);
-                final zone = zones.where((z) => raw == siteQrPayload(z.id)).firstOrNull;
+                final zone = zones.where((z) => isSiteQrFor(raw, z.id)).firstOrNull;
                 if (zone == null) {
                   if (mounted) showMessage(context, 'That is not a Vigil site code for your organization.');
                   return;
                 }
-                await _record('clock_in', null, null, true, 'Clocked in at ${zone.name}.');
+                await _record('clock_in', 'Clocked in at ${zone.name}.', siteCode: raw);
               },
             ),
           ),

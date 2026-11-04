@@ -46,11 +46,13 @@ class ClockService {
     return toStart < toEnd ? toStart : toEnd;
   }
 
+  /// Records a punch. The database sets its time and whether it is on site,
+  /// from the position or from [siteCode], a scanned site QR code.
   Future<void> recordClockEvent(
     String eventType, {
     double? latitude,
     double? longitude,
-    bool isGeofenced = false,
+    String? siteCode,
   }) async {
     final user = _ref.read(authProvider).currentUser;
     final settings = _ref.read(settingsProvider);
@@ -73,52 +75,32 @@ class ClockService {
     final segmentStart = eventType == 'clock_out' ? segment.lastClockIn : null;
     final segmentBreak = eventType == 'clock_out' ? segment.currentSegmentBreak : Duration.zero;
 
-    final now = DateTime.now();
-
-    // 1. Fetch current active shift for user
-    final activeShift = await _findActiveShift(user.id, now);
-
-    final eventId = const Uuid().v4();
-    final clockEvent = ClockEvent(
-      id: eventId,
-      organizationId: user.organizationId,
-      employeeId: user.id,
-      eventType: eventType,
-      eventTime: now,
-      latitude: latitude,
-      longitude: longitude,
-      isGeofenced: isGeofenced,
-      createdAt: now,
-    );
-
-    // 2. Save clock event to database with GPS coordinates and Geofence status
-    await _supabase.from('clock_events').insert({
-      'id': eventId,
-      'organization_id': clockEvent.organizationId,
-      'employee_id': clockEvent.employeeId,
-      'event_type': clockEvent.eventType,
-      'event_time': clockEvent.eventTime.toUtc().toIso8601String(),
-      'latitude': latitude,
-      'longitude': longitude,
-      'is_geofenced': isGeofenced,
-    });
-
-    // 3. Compliance rules for this punch.
-    final found = <ExceptionRecord>[];
-    if (!isGeofenced && latitude != null && longitude != null && activeShift != null) {
-      found.add(ExceptionRecord(
-        id: '',
-        organizationId: user.organizationId,
-        employeeId: user.id,
-        exceptionType: 'geofence_violation',
-        severity: 'high',
-        shiftId: activeShift.id,
-        status: 'pending',
-        description: '${eventType == 'clock_in' ? 'Clocked in' : 'Clocked out'} outside the ${activeShift.siteLocation} work site.',
-        createdAt: now,
-      ));
+    // 1. Save the punch; the rules below use the time the database gave it.
+    final ClockEvent clockEvent;
+    try {
+      final row = await _supabase.from('clock_events').insert({
+        'id': const Uuid().v4(),
+        'organization_id': user.organizationId,
+        'employee_id': user.id,
+        'event_type': eventType,
+        'event_time': DateTime.now().toUtc().toIso8601String(),
+        'latitude': latitude,
+        'longitude': longitude,
+        'site_code': siteCode,
+      }).select().single();
+      clockEvent = ClockEvent.fromJson(row);
+    } on PostgrestException catch (e) {
+      if (e.message.contains('invalid site code')) {
+        throw const ClockStateException('This site code is no longer valid. Ask your manager for a new one.');
+      }
+      rethrow;
     }
-    found.addAll(ExceptionEngine.evaluatePunch(
+
+    // 2. Fetch current active shift for user
+    final activeShift = await _findActiveShift(user.id, clockEvent.eventTime);
+
+    // 3. Compliance rules for this punch (the database raises geofence issues).
+    final found = ExceptionEngine.evaluatePunch(
       event: clockEvent,
       shift: activeShift,
       graceMinutes: settings.allowedLateMinutes,
@@ -126,7 +108,7 @@ class ClockService {
       organizationId: user.organizationId,
       clockInTime: segmentStart,
       breakTaken: segmentBreak,
-    ));
+    );
 
     // 4. Store them (a punch must never fail because of this step).
     await raiseExceptions(found);
@@ -194,7 +176,6 @@ class ClockService {
     final user = _ref.read(authProvider).currentUser;
     if (user == null) return;
 
-    final now = DateTime.now();
     final activeBreaks = await _supabase
         .from('breaks')
         .select()
@@ -204,14 +185,10 @@ class ClockService {
         .limit(1);
 
     if (activeBreaks.isNotEmpty) {
-      final breakId = activeBreaks.first['id'];
-      final startTime = DateTime.parse(activeBreaks.first['start_time']).toLocal();
-
-      // Timers use the exact timestamps; this is only a rounded summary.
+      // The database sets the actual end time and duration.
       await _supabase.from('breaks').update({
-        'end_time': now.toUtc().toIso8601String(),
-        'duration_minutes': (now.difference(startTime).inSeconds / 60).round(),
-      }).eq('id', breakId);
+        'end_time': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', activeBreaks.first['id']);
     }
 
     final attendance = _ref.read(attendanceProvider.notifier);
@@ -237,30 +214,6 @@ class ClockService {
       shiftId: (await _findActiveShift(employeeId, DateTime.now()))?.id,
     );
     if (issue != null) await raiseExceptions([issue]);
-  }
-
-  /// Records a completed quick break (for instant compliance logs)
-  Future<void> recordBreak({int durationMinutes = 30, String breakType = 'meal'}) async {
-    final user = _ref.read(authProvider).currentUser;
-    if (user == null) return;
-    if (_ref.read(attendanceProvider).status == ShiftStatus.clockedOut) {
-      throw const ClockStateException('Clock in before logging a break.');
-    }
-
-    final now = DateTime.now();
-    final shiftId = (await _findActiveShift(user.id, now))?.id;
-
-    await _supabase.from('breaks').insert({
-      'organization_id': user.organizationId,
-      'employee_id': user.id,
-      'shift_id': shiftId,
-      'start_time': now.subtract(Duration(minutes: durationMinutes)).toUtc().toIso8601String(),
-      'end_time': now.toUtc().toIso8601String(),
-      'duration_minutes': durationMinutes,
-      'break_type': breakType,
-    });
-
-    _ref.read(attendanceProvider.notifier).refresh();
   }
 }
 

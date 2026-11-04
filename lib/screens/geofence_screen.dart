@@ -124,7 +124,16 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
     );
   }
 
-  void _showQr(GeofenceZone z) {
+  Future<void> _showQr(GeofenceZone z) async {
+    final String qrToken;
+    try {
+      final row = await Supabase.instance.client.from('site_qr_codes').select('qr_token').eq('zone_id', z.id).single();
+      qrToken = row['qr_token'];
+    } catch (_) {
+      if (mounted) showMessage(context, 'Could not load the QR code. Try again.');
+      return;
+    }
+    if (!mounted) return;
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -137,7 +146,7 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
               Container(
                 color: Colors.white,
                 padding: const EdgeInsets.all(12),
-                child: QrImageView(data: siteQrPayload(z.id), size: 232),
+                child: QrImageView(data: siteQrPayload(z.id, qrToken), size: 232),
               ),
               const SizedBox(height: 16),
               Text(

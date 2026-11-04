@@ -43,4 +43,10 @@ class GeofenceZone {
 }
 
 /// Payload encoded in a site's printable QR code; scanned by the punch clock.
-String siteQrPayload(String zoneId) => 'vigil:site:$zoneId';
+/// [qrToken] is the site's secret, which the database checks on each punch.
+String siteQrPayload(String zoneId, String qrToken) => 'vigil:site:$zoneId:$qrToken';
+
+/// Whether a scanned code names this site. Codes printed before site secrets
+/// also match, so the database can reject them with a clearer message.
+bool isSiteQrFor(String scanned, String zoneId) =>
+    scanned == 'vigil:site:$zoneId' || scanned.startsWith('vigil:site:$zoneId:');
