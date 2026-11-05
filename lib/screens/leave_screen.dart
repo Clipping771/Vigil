@@ -21,10 +21,6 @@ const _leaveTypes = {
   'other': ('Other leave', Icons.event_note_outlined),
 };
 
-/// Fair Work (Australia) yearly entitlements for full-time employees, in days.
-const _annualEntitlement = 20;
-const _sickEntitlement = 10;
-
 class LeaveScreen extends ConsumerStatefulWidget {
   const LeaveScreen({super.key});
 
@@ -59,9 +55,15 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
     }).toList();
 
     final year = DateTime.now().year;
-    final mine = all.where((r) => r.employeeId == me?.id && r.isApproved && r.startDate.year == year);
-    final usedAnnual = mine.where((r) => r.leaveType == 'annual').fold<int>(0, (s, r) => s + r.durationDays);
-    final usedSick = mine.where((r) => r.leaveType == 'sick').fold<int>(0, (s, r) => s + r.durationDays);
+    final mine = all.where((r) => r.employeeId == me?.id && r.isApproved);
+    final usedAnnual = mine.where((r) => r.leaveType == 'annual').fold<int>(0, (s, r) => s + r.workingDaysInYear(year));
+    final usedSick = mine.where((r) => r.leaveType == 'sick').fold<int>(0, (s, r) => s + r.workingDaysInYear(year));
+    // The staff list is live, so a manager's change shows without signing in again.
+    final myRecord = ref.watch(staffProvider).value?.where((e) => e.id == me?.id).firstOrNull ?? me;
+    final annualEntitlement = myRecord?.annualLeaveDays ?? 0;
+    final sickEntitlement = myRecord?.sickLeaveDays ?? 0;
+    final annualLeft = annualEntitlement - usedAnnual;
+    final sickLeft = sickEntitlement - usedSick;
     final scope = isManager && !_mineOnly ? all : all.where((r) => r.employeeId == me?.id).toList();
 
     return AppPage(
@@ -87,16 +89,16 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
             StatTile(
               icon: Icons.beach_access_outlined,
               label: 'Annual leave left',
-              value: '${(_annualEntitlement - usedAnnual).clamp(0, 99)} days',
-              caption: '$usedAnnual of $_annualEntitlement used in $year',
-              tone: Tone.primary,
+              value: '$annualLeft ${annualLeft.abs() == 1 ? 'day' : 'days'}',
+              caption: '$usedAnnual of $annualEntitlement used in $year',
+              tone: annualLeft < 0 ? Tone.danger : Tone.primary,
             ),
             StatTile(
               icon: Icons.medical_services_outlined,
               label: 'Sick leave left',
-              value: '${(_sickEntitlement - usedSick).clamp(0, 99)} days',
-              caption: '$usedSick of $_sickEntitlement used in $year',
-              tone: Tone.info,
+              value: '$sickLeft ${sickLeft.abs() == 1 ? 'day' : 'days'}',
+              caption: '$usedSick of $sickEntitlement used in $year',
+              tone: sickLeft < 0 ? Tone.danger : Tone.info,
             ),
             StatTile(
               icon: Icons.hourglass_top,
@@ -233,7 +235,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Icon(typeIcon, size: 16, color: cs.onSurfaceVariant),
-                          Text('$typeLabel  ·  $dates  ·  ${r.durationDays} ${r.durationDays == 1 ? 'day' : 'days'}',
+                          Text('$typeLabel  ·  $dates  ·  ${r.workingDays} working ${r.workingDays == 1 ? 'day' : 'days'}',
                               style: t.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
                         ],
                       ),

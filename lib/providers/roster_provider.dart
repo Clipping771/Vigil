@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/shift.dart';
 
 import '../providers/auth_provider.dart';
+import 'realtime_rows.dart';
 
 /// Rostered shifts, kept live via Supabase Realtime. Managers see the whole
 /// organization; staff see only their own shifts.
@@ -15,7 +16,7 @@ final rosterProvider = StreamProvider<List<Shift>>((ref) {
       .stream(primaryKey: ['id'])
       .eq('organization_id', user.organizationId)
       .order('start_time', ascending: true)
-      .map((rows) => rows
+      .map((rows) => withoutDuplicateRows(ref, rows)
           .map(Shift.fromJson)
           .where((s) => user.isManager || s.employeeId == user.id)
           .toList());

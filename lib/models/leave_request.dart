@@ -31,8 +31,27 @@ class LeaveRequest {
 
   /// Duration in inclusive calendar days
   int get durationDays {
-    final diff = endDate.difference(startDate).inDays;
+    // UTC dates, because a daylight saving change makes a local day 23 hours.
+    final start = DateTime.utc(startDate.year, startDate.month, startDate.day);
+    final end = DateTime.utc(endDate.year, endDate.month, endDate.day);
+    final diff = end.difference(start).inDays;
     return diff >= 0 ? diff + 1 : 1;
+  }
+
+  /// Monday to Friday days in this request. Public holidays are not excluded.
+  int get workingDays => _workingDaysWhere((_) => true);
+
+  /// Working days in this request that fall in [year], so leave across New Year
+  /// counts against each year separately.
+  int workingDaysInYear(int year) => _workingDaysWhere((day) => day.year == year);
+
+  int _workingDaysWhere(bool Function(DateTime day) include) {
+    var count = 0;
+    for (var i = 0; i < durationDays; i++) {
+      final day = DateTime.utc(startDate.year, startDate.month, startDate.day + i);
+      if (day.weekday <= DateTime.friday && include(day)) count++;
+    }
+    return count;
   }
 
   bool get isPending => status.toLowerCase() == 'pending';

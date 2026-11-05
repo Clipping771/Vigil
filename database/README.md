@@ -11,7 +11,7 @@ The **Vigil** database is built on **PostgreSQL (Supabase)**. It provides multi-
 |---|------------|---------|-------------|
 | 1 | `organizations` | Tenant accounts & subscription tiers | `id`, `name`, `subscription_plan`, `created_at`, `updated_at` |
 | 2 | `organization_settings` | Per-tenant compliance thresholds & reporting config | `organization_id`, `allowed_late_minutes`, `allowed_overtime_minutes`, `auto_reporting_enabled`, `report_frequency` |
-| 3 | `employees` | Staff & manager directory with role assignments | `id`, `organization_id`, `email`, `full_name`, `role`, `site_location` |
+| 3 | `employees` | Staff & manager directory with role assignments | `id`, `organization_id`, `email`, `full_name`, `role`, `site_location`, `employment_type`, `annual_leave_days`, `sick_leave_days` |
 | 4 | `shifts` | Scheduled shifts by day, time, and site location | `id`, `organization_id`, `employee_id`, `site_location`, `start_time`, `end_time` |
 | 5 | `clock_events` | Raw GPS & QR clock-in/out timestamps | `id`, `organization_id`, `employee_id`, `event_type`, `event_time`, `latitude`, `longitude`, `is_geofenced` |
 | 6 | `breaks` | Shift meal & rest breaks (Fair Work compliance) | `id`, `organization_id`, `shift_id`, `employee_id`, `start_time`, `end_time`, `duration_minutes`, `break_type` |

@@ -100,7 +100,7 @@ List<String> proposalTypesFor(Employee me) => [
           reject('you cannot decide your own leave');
         } else {
           add('${type == 'approve_leave' ? 'Approve' : 'Decline'} ${l.leaveType} leave for ${nameOf(l.employeeId, l.employeeName)}: '
-              '${day.format(l.startDate)} to ${day.format(l.endDate)} (${l.durationDays} day${l.durationDays == 1 ? '' : 's'})', {'id': l.id});
+              '${day.format(l.startDate)} to ${day.format(l.endDate)} (${l.workingDays} working day${l.workingDays == 1 ? '' : 's'})', {'id': l.id});
         }
       case 'resolve_issue' || 'acknowledge_issue' || 'dismiss_issue':
         final e = find<ExceptionRecord>(data.exceptions, (e) => e.id, p['id']);

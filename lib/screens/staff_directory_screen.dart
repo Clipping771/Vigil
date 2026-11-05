@@ -8,6 +8,12 @@ import '../widgets/app_shell.dart';
 import '../widgets/auth_layout.dart' show validateEmail;
 import '../widgets/agent_fab.dart';
 
+/// Checks a yearly leave allowance: a whole number from 0 to 366.
+String? validateLeaveDays(String? value) {
+  final days = int.tryParse(value?.trim() ?? '');
+  return days == null || days < 0 || days > 366 ? 'Enter 0 to 366' : null;
+}
+
 class StaffDirectoryScreen extends ConsumerStatefulWidget {
   const StaffDirectoryScreen({super.key});
 
@@ -42,6 +48,11 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
     final existingRole = existing?.role == 'owner' ? 'admin' : existing?.role;
     String selectedRole = existingRole != null && roles.contains(existingRole) ? existingRole : 'staff';
     final canChangeRole = existing == null || (roles.contains(existing.role) && existing.id != me.id);
+    // Matches the database: managers cannot change their own leave entitlements.
+    final canChangeLeave = existing == null || existing.id != me.id || me.isOrgAdmin;
+    String employmentType = existing?.employmentType ?? 'full_time';
+    final annualController = TextEditingController(text: '${existing?.annualLeaveDays ?? 20}');
+    final sickController = TextEditingController(text: '${existing?.sickLeaveDays ?? 10}');
     bool isSaving = false;
 
     final saved = await showDialog<bool>(
@@ -52,6 +63,11 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
             if (!(formKey.currentState?.validate() ?? false)) return;
             setDialogState(() => isSaving = true);
             final site = siteController.text.trim();
+            final leave = {
+              'employment_type': employmentType,
+              'annual_leave_days': int.parse(annualController.text.trim()),
+              'sick_leave_days': int.parse(sickController.text.trim()),
+            };
             try {
               final client = Supabase.instance.client;
               if (existing == null) {
@@ -61,12 +77,14 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                   'role': selectedRole,
                   'organization_id': me.organizationId,
                   'site_location': site.isEmpty ? null : site,
+                  ...leave,
                 });
               } else {
                 await client.from('employees').update({
                   'full_name': nameController.text.trim(),
                   if (canChangeRole) 'role': selectedRole,
                   'site_location': site.isEmpty ? null : site,
+                  if (canChangeLeave) ...leave,
                 }).eq('id', existing.id);
               }
               if (context.mounted) Navigator.of(context).pop(true);
@@ -120,6 +138,41 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
                         controller: siteController,
                         decoration: const InputDecoration(labelText: 'Site location (optional)'),
                       ),
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        initialValue: employmentType,
+                        decoration: InputDecoration(
+                          labelText: 'Employment type',
+                          helperText: canChangeLeave ? null : 'An admin must change your leave entitlements',
+                        ),
+                        items: [
+                          for (final e in employmentTypes.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
+                        ],
+                        onChanged: canChangeLeave
+                            ? (v) => setDialogState(() {
+                                  employmentType = v ?? employmentType;
+                                  final defaults = defaultLeaveDays(employmentType);
+                                  annualController.text = defaults == null ? '' : '${defaults.$1}';
+                                  sickController.text = defaults == null ? '' : '${defaults.$2}';
+                                })
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: annualController,
+                        enabled: canChangeLeave,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Annual leave days per year'),
+                        validator: validateLeaveDays,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: sickController,
+                        enabled: canChangeLeave,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Sick leave days per year'),
+                        validator: validateLeaveDays,
+                      ),
                       if (existing == null) ...[
                         const SizedBox(height: 16),
                         Text(
@@ -149,6 +202,8 @@ class _StaffDirectoryScreenState extends ConsumerState<StaffDirectoryScreen> {
     nameController.dispose();
     emailController.dispose();
     siteController.dispose();
+    annualController.dispose();
+    sickController.dispose();
     if (saved == true) ref.invalidate(staffProvider);
   }
 

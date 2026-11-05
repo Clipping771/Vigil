@@ -80,10 +80,12 @@ psql -d vigil_test -f database/migrations/003_exception_review.sql
 psql -d vigil_test -f database/migrations/004_admin_founder.sql
 psql -d vigil_test -f database/migrations/005_break_rules.sql
 psql -d vigil_test -f database/migrations/006_punch_integrity.sql
+psql -d vigil_test -f database/migrations/007_leave_entitlements.sql
 psql -d vigil_test -f database/tests/rls_tests.sql   # prints PASS/FAIL per scenario
 psql -d vigil_test -f database/tests/exception_rules_tests.sql
 psql -d vigil_test -f database/tests/exception_review_tests.sql
 psql -d vigil_test -f database/tests/punch_integrity_tests.sql
+psql -d vigil_test -f database/tests/leave_entitlement_tests.sql
 ```
 
 Preview the signed-in app with sample data (no backend):

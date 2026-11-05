@@ -5,7 +5,9 @@ import 'package:vigil/models/exception_record.dart';
 import 'package:vigil/models/geofence_zone.dart';
 import 'package:vigil/models/leave_request.dart';
 import 'package:vigil/models/shift.dart';
+import 'package:vigil/providers/realtime_rows.dart';
 import 'package:vigil/providers/settings_provider.dart';
+import 'package:vigil/screens/staff_directory_screen.dart';
 import 'package:vigil/services/agent_actions.dart';
 import 'package:vigil/services/agent_context.dart';
 import 'package:vigil/services/agent_service.dart';
@@ -199,7 +201,7 @@ void main() {
       test('manager gets a card written from the real record', () {
         final r = resolveProposals([{'type': 'approve_leave', 'id': 'aaaa1111'}], manager, data);
         expect(r.rejected, isEmpty);
-        expect(r.proposals.single.summary, 'Approve annual leave for Test staff: Wed 4 Nov 2026 to Fri 6 Nov 2026 (3 days)');
+        expect(r.proposals.single.summary, 'Approve annual leave for Test staff: Wed 4 Nov 2026 to Fri 6 Nov 2026 (3 working days)');
         expect(r.proposals.single.args['id'], 'aaaa1111-0000');
       });
 
@@ -235,6 +237,111 @@ void main() {
       expect(validateNewPassword('short1'), isNotNull);
       expect(validateNewPassword('longpassword'), isNotNull);
       expect(validateNewPassword('correct horse 9'), isNull);
+    });
+  });
+
+  group('Leave days', () {
+    LeaveRequest leave(DateTime start, DateTime end) =>
+        LeaveRequest(id: 'l', employeeId: 'e', leaveType: 'annual', startDate: start, endDate: end, status: 'approved');
+
+    test('weekends are not working days', () {
+      // Monday 2 Nov to the next Monday 9 Nov.
+      final r = leave(DateTime(2026, 11, 2), DateTime(2026, 11, 9));
+      expect(r.durationDays, 8);
+      expect(r.workingDays, 6);
+      expect(leave(DateTime(2026, 11, 7), DateTime(2026, 11, 8)).workingDays, 0);
+    });
+
+    test('leave across New Year counts against each year', () {
+      // Tuesday 29 Dec 2026 to Tuesday 5 Jan 2027.
+      final r = leave(DateTime(2026, 12, 29), DateTime(2027, 1, 5));
+      expect(r.workingDaysInYear(2026), 3);
+      expect(r.workingDaysInYear(2027), 3);
+      expect(r.workingDaysInYear(2028), 0);
+      expect(r.workingDays, 6);
+    });
+
+    test('a daylight saving change does not lose a day', () {
+      // Australian clocks go forward on Sunday 4 Oct 2026.
+      final r = leave(DateTime(2026, 10, 1), DateTime(2026, 10, 7));
+      expect(r.durationDays, 7);
+      expect(r.workingDays, 5);
+    });
+
+    test('an end date before the start counts as one day', () {
+      final r = leave(DateTime(2026, 11, 4), DateTime(2026, 11, 2));
+      expect(r.durationDays, 1);
+      expect(r.workingDays, 1);
+    });
+  });
+
+  group('Leave entitlements', () {
+    Map<String, dynamic> row([Map<String, dynamic> extra = const {}]) => {
+          'id': 'e',
+          'organization_id': 'o',
+          'email': 'a@b.c',
+          'full_name': 'A',
+          'role': 'staff',
+          'created_at': '2026-01-01T00:00:00Z',
+          ...extra,
+        };
+
+    test('are read from the employee record', () {
+      final e = Employee.fromJson(row({'employment_type': 'part_time', 'annual_leave_days': 12, 'sick_leave_days': 6}));
+      expect(e.employmentType, 'part_time');
+      expect(e.annualLeaveDays, 12);
+      expect(e.sickLeaveDays, 6);
+    });
+
+    test('fall back to full-time before the migration has run', () {
+      final e = Employee.fromJson(row());
+      expect(e.employmentType, 'full_time');
+      expect(e.annualLeaveDays, 20);
+      expect(e.sickLeaveDays, 10);
+    });
+
+    test('default by employment type, with part-time left to the manager', () {
+      expect(defaultLeaveDays('full_time'), (20, 10));
+      expect(defaultLeaveDays('casual'), (0, 0));
+      expect(defaultLeaveDays('part_time'), isNull);
+    });
+
+    test('must be whole numbers from 0 to 366', () {
+      expect(validateLeaveDays('0'), isNull);
+      expect(validateLeaveDays(' 25 '), isNull);
+      expect(validateLeaveDays('366'), isNull);
+      expect(validateLeaveDays(''), isNotNull);
+      expect(validateLeaveDays('-1'), isNotNull);
+      expect(validateLeaveDays('367'), isNotNull);
+      expect(validateLeaveDays('2.5'), isNotNull);
+    });
+  });
+
+  group('Realtime rows', () {
+    test('a row listed twice appears once, keeping the order', () {
+      final rows = [
+        {'id': 'jack', 'full_name': 'Jack'},
+        {'id': 'kinley', 'full_name': 'Kinley'},
+        {'id': 'kinley', 'full_name': 'Kinley'},
+        {'id': 'paul', 'full_name': 'Paul'},
+      ];
+      expect(uniqueRowsById(rows).map((r) => r['id']), ['jack', 'kinley', 'paul']);
+    });
+
+    test('different people with the same name are both kept', () {
+      final rows = [
+        {'id': 'a', 'full_name': 'Kinley'},
+        {'id': 'b', 'full_name': 'Kinley'},
+      ];
+      expect(uniqueRowsById(rows), hasLength(2));
+    });
+
+    test('rows without duplicates are unchanged', () {
+      final rows = [
+        {'id': 'a'},
+        {'id': 'b'},
+      ];
+      expect(uniqueRowsById(rows), rows);
     });
   });
 
