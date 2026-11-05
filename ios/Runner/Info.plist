@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Vigil uses the camera to scan your site's QR code when you clock in.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Vigil uses your location to confirm you are on site when you clock in.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

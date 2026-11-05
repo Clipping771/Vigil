@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- GPS clock-in and setting a site's location. The camera permission for
+         QR scanning comes from the mobile_scanner plugin. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
         android:label="vigil"
         android:name="${applicationName}"
