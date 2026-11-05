@@ -8,10 +8,11 @@ import 'realtime_rows.dart';
 final geofenceProvider = StreamProvider<List<GeofenceZone>>((ref) {
   final orgId = ref.watch(authProvider.select((s) => s.currentUser?.organizationId));
   if (orgId == null) return Stream.value(const []);
+  final clean = liveRows(ref, 'geofence_zones');
   return Supabase.instance.client
       .from('geofence_zones')
       .stream(primaryKey: ['id'])
       .eq('organization_id', orgId)
       .order('created_at', ascending: false)
-      .map((rows) => withoutDuplicateRows(ref, rows).map(GeofenceZone.fromJson).toList());
+      .map((rows) => clean(rows).map(GeofenceZone.fromJson).toList());
 });

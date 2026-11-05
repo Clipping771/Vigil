@@ -1,3 +1,5 @@
+import 'leave_calendar.dart';
+
 class LeaveRequest {
   final String id;
   final String? organizationId;
@@ -38,21 +40,17 @@ class LeaveRequest {
     return diff >= 0 ? diff + 1 : 1;
   }
 
-  /// Monday to Friday days in this request. Public holidays are not excluded.
-  int get workingDays => _workingDaysWhere((_) => true);
+  /// Days in this request that use up leave. See [LeaveCalendar.leaveDays].
+  int workingDays(LeaveCalendar calendar) => _leaveDays(calendar).length;
 
   /// Working days in this request that fall in [year], so leave across New Year
   /// counts against each year separately.
-  int workingDaysInYear(int year) => _workingDaysWhere((day) => day.year == year);
+  int workingDaysInYear(int year, LeaveCalendar calendar) =>
+      _leaveDays(calendar).where((day) => day.year == year).length;
 
-  int _workingDaysWhere(bool Function(DateTime day) include) {
-    var count = 0;
-    for (var i = 0; i < durationDays; i++) {
-      final day = DateTime.utc(startDate.year, startDate.month, startDate.day + i);
-      if (day.weekday <= DateTime.friday && include(day)) count++;
-    }
-    return count;
-  }
+  Iterable<DateTime> _leaveDays(LeaveCalendar calendar) => calendar.leaveDays(employeeId, [
+        for (var i = 0; i < durationDays; i++) DateTime.utc(startDate.year, startDate.month, startDate.day + i),
+      ]);
 
   bool get isPending => status.toLowerCase() == 'pending';
   bool get isApproved => status.toLowerCase() == 'approved';

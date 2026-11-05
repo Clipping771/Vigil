@@ -6,6 +6,7 @@ CREATE TABLE auth.users (
   id UUID PRIMARY KEY,
   email TEXT,
   email_confirmed_at TIMESTAMPTZ,
+  last_sign_in_at TIMESTAMPTZ,
   raw_user_meta_data JSONB DEFAULT '{}'::jsonb
 );
 CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS $$

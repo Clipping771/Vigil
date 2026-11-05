@@ -27,7 +27,11 @@ Fresh project:
 5. `database/migrations/004_admin_founder.sql` — converts legacy owners to admins; other admins cannot demote or remove the workspace founder
 6. `database/migrations/005_break_rules.sql` — allows the excessive-breaks issue type
 7. `database/migrations/006_punch_integrity.sql` — the database sets punch and break times and checks location; staff see only their own punches. Site QR codes printed earlier stop working, so print them again from **Work sites**
-8. `database/enable_realtime.sql`
+8. `database/migrations/007_leave_entitlements.sql` — per-employee leave entitlements
+9. `database/migrations/008_qr_requires_position.sql` — a site QR scan counts as on site only with a position inside that site's radius; otherwise it is recorded as not on site and raised for a manager to review. Printed codes keep working
+10. `database/migrations/009_public_holidays.sql` — each organization's public holiday list, edited in **Settings**. It starts empty, so add your state's holidays or leave on those dates still uses up balances
+11. `database/migrations/010_removed_users_stay_removed.sql` — someone removed from **Staff** stays removed instead of getting a new workspace the next time they open the app; invite them to bring them back
+12. `database/enable_realtime.sql`
 
 Existing database: run the migrations in order (each is idempotent and safe to re-run), then `enable_realtime.sql`. Run them before deploying the app.
 
@@ -81,11 +85,17 @@ psql -d vigil_test -f database/migrations/004_admin_founder.sql
 psql -d vigil_test -f database/migrations/005_break_rules.sql
 psql -d vigil_test -f database/migrations/006_punch_integrity.sql
 psql -d vigil_test -f database/migrations/007_leave_entitlements.sql
+psql -d vigil_test -f database/migrations/008_qr_requires_position.sql
+psql -d vigil_test -f database/migrations/009_public_holidays.sql
+psql -d vigil_test -f database/migrations/010_removed_users_stay_removed.sql
 psql -d vigil_test -f database/tests/rls_tests.sql   # prints PASS/FAIL per scenario
 psql -d vigil_test -f database/tests/exception_rules_tests.sql
 psql -d vigil_test -f database/tests/exception_review_tests.sql
 psql -d vigil_test -f database/tests/punch_integrity_tests.sql
 psql -d vigil_test -f database/tests/leave_entitlement_tests.sql
+psql -d vigil_test -f database/tests/qr_position_tests.sql
+psql -d vigil_test -f database/tests/public_holiday_tests.sql
+psql -d vigil_test -f database/tests/removed_user_tests.sql
 ```
 
 Preview the signed-in app with sample data (no backend):

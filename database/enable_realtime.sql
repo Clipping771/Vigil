@@ -17,8 +17,10 @@ BEGIN
 
   FOREACH t IN ARRAY ARRAY[
     'employees', 'shifts', 'clock_events', 'breaks', 'exception_records',
-    'leave_requests', 'geofence_zones', 'organization_settings'
+    'leave_requests', 'geofence_zones', 'organization_settings', 'public_holidays'
   ] LOOP
+    -- Tables added by a migration may not exist yet; the migration adds them too.
+    CONTINUE WHEN to_regclass(format('public.%I', t)) IS NULL;
     EXECUTE format('ALTER TABLE public.%I REPLICA IDENTITY FULL', t);
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables
@@ -29,5 +31,5 @@ BEGIN
   END LOOP;
 END $$;
 
--- Check: should list all eight tables.
+-- Check: should list all nine tables (eight before migration 009).
 SELECT tablename FROM pg_publication_tables WHERE pubname = 'supabase_realtime' ORDER BY tablename;

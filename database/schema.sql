@@ -4,6 +4,7 @@
 -- ==============================================================================
 
 -- Clean up existing tables
+DROP TABLE IF EXISTS public.public_holidays CASCADE;
 DROP TABLE IF EXISTS public.audit_logs CASCADE;
 DROP TABLE IF EXISTS public.organization_settings CASCADE;
 DROP TABLE IF EXISTS public.breaks CASCADE;

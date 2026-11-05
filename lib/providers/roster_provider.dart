@@ -11,12 +11,13 @@ final rosterProvider = StreamProvider<List<Shift>>((ref) {
   final user = ref.watch(authProvider).currentUser;
   if (user == null) return Stream.value(const []);
   // Realtime streams accept a single filter, so narrow staff rosters here.
+  final clean = liveRows(ref, 'shifts');
   return Supabase.instance.client
       .from('shifts')
       .stream(primaryKey: ['id'])
       .eq('organization_id', user.organizationId)
       .order('start_time', ascending: true)
-      .map((rows) => withoutDuplicateRows(ref, rows)
+      .map((rows) => clean(rows)
           .map(Shift.fromJson)
           .where((s) => user.isManager || s.employeeId == user.id)
           .toList());

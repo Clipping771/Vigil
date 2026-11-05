@@ -6,6 +6,7 @@ import '../models/employee.dart';
 import '../models/exception_record.dart';
 import '../models/geofence_zone.dart';
 import '../models/leave_request.dart';
+import '../models/public_holiday.dart';
 import '../models/shift.dart';
 import '../providers/attendance_provider.dart' show breakLength;
 import '../providers/auth_provider.dart';
@@ -31,6 +32,7 @@ class AgentData {
   final List<ExceptionRecord> exceptions;
   final List<LeaveRequest> leave;
   final List<GeofenceZone> sites;
+  final List<PublicHoliday> holidays;
 
   const AgentData({
     required this.organizationName,
@@ -41,6 +43,7 @@ class AgentData {
     this.exceptions = const [],
     this.leave = const [],
     this.sites = const [],
+    this.holidays = const [],
   });
 }
 
@@ -76,6 +79,7 @@ Future<AgentData> loadAgentData(Employee me, {DateTime? now}) async {
     rows(scoped('exception_records').or('status.eq.pending,created_at.gte.$issuesFrom').order('created_at', ascending: false).limit(300)),
     rows(scoped('leave_requests').or('status.eq.pending,end_date.gte.${issuesFrom.substring(0, 10)}').order('start_date').limit(300)),
     rows(db.from('geofence_zones').select().eq('organization_id', org).order('name')),
+    rows(db.from('public_holidays').select().eq('organization_id', org).order('holiday_date')),
   ]);
 
   final employees = results[1].map(Employee.fromJson).toList();
@@ -88,6 +92,7 @@ Future<AgentData> loadAgentData(Employee me, {DateTime? now}) async {
     exceptions: results[5].map(ExceptionRecord.fromJson).toList(),
     leave: results[6].map(LeaveRequest.fromJson).toList(),
     sites: results[7].map(GeofenceZone.fromJson).toList(),
+    holidays: results[8].map(PublicHoliday.fromJson).toList(),
   );
 }
 

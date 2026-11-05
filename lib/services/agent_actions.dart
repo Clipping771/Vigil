@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/employee.dart';
 import '../models/exception_record.dart';
+import '../models/leave_calendar.dart';
 import '../models/leave_request.dart';
 import '../models/shift.dart';
 import '../providers/auth_provider.dart';
@@ -99,8 +100,9 @@ List<String> proposalTypesFor(Employee me) => [
         } else if (l.employeeId == me.id && !me.isOrgAdmin) {
           reject('you cannot decide your own leave');
         } else {
+          final workingDays = l.workingDays(LeaveCalendar(shifts: data.shifts, holidays: data.holidays));
           add('${type == 'approve_leave' ? 'Approve' : 'Decline'} ${l.leaveType} leave for ${nameOf(l.employeeId, l.employeeName)}: '
-              '${day.format(l.startDate)} to ${day.format(l.endDate)} (${l.workingDays} working day${l.workingDays == 1 ? '' : 's'})', {'id': l.id});
+              '${day.format(l.startDate)} to ${day.format(l.endDate)} ($workingDays working day${workingDays == 1 ? '' : 's'})', {'id': l.id});
         }
       case 'resolve_issue' || 'acknowledge_issue' || 'dismiss_issue':
         final e = find<ExceptionRecord>(data.exceptions, (e) => e.id, p['id']);

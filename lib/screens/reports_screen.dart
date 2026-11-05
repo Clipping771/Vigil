@@ -18,8 +18,16 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   final _engine = ReportingEngine();
   late DateTimeRange _range = _defaultRange();
-  String? _exporting; // 'csv' | 'pdf'
+  late DateTimeRange _payPeriod = _defaultPayPeriod();
+  String? _exporting; // 'csv' | 'pdf' | 'timesheet-csv' | 'timesheet-pdf'
   final _emailController = TextEditingController();
+
+  /// The last full fortnight, so nobody's current shift is left open by default.
+  /// Start and end are the first and last days of the period.
+  static DateTimeRange _defaultPayPeriod() {
+    final now = DateTime.now();
+    return DateTimeRange(start: DateTime(now.year, now.month, now.day - 14), end: DateTime(now.year, now.month, now.day - 1));
+  }
 
   static DateTimeRange _defaultRange() {
     final now = DateTime.now();
@@ -62,12 +70,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       if (format == 'csv') {
         await _engine.saveCsv(_engine.buildCsv(rows), name);
       } else {
-        final org = await Supabase.instance.client
-            .from('organizations')
-            .select('name')
-            .eq('id', user.organizationId)
-            .maybeSingle();
-        final bytes = await _engine.buildPdf(rows, organizationName: org?['name'] ?? 'Organization', period: _periodLabel);
+        final bytes = await _engine.buildPdf(rows, organizationName: await _organizationName(user.organizationId), period: _periodLabel);
         await _engine.savePdf(bytes, name);
       }
       messenger.showSnackBar(SnackBar(content: Text('Exported ${rows.length} exceptions as ${format.toUpperCase()}.')));
@@ -76,6 +79,81 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     } finally {
       if (mounted) setState(() => _exporting = null);
     }
+  }
+
+  Future<String> _organizationName(String organizationId) async {
+    final org = await Supabase.instance.client.from('organizations').select('name').eq('id', organizationId).maybeSingle();
+    return org?['name'] ?? 'Organization';
+  }
+
+  String get _payPeriodLabel {
+    final f = DateFormat('d MMM yyyy');
+    return '${f.format(_payPeriod.start)} – ${f.format(_payPeriod.end)}';
+  }
+
+  Future<void> _pickPayPeriod() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _payPeriod,
+      helpText: 'Select pay period',
+    );
+    if (picked != null) setState(() => _payPeriod = picked);
+  }
+
+  Future<void> _exportTimesheet(String format) async {
+    final user = ref.read(authProvider).currentUser;
+    if (user == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final first = _payPeriod.start, last = _payPeriod.end;
+    setState(() => _exporting = 'timesheet-$format');
+    try {
+      final rows = await _engine.fetchTimesheet(
+        user,
+        from: DateTime(first.year, first.month, first.day),
+        to: DateTime(last.year, last.month, last.day + 1),
+      );
+      final name = 'vigil-timesheet-${DateFormat('yyyyMMdd').format(first)}-${DateFormat('yyyyMMdd').format(last)}';
+      if (format == 'csv') {
+        await _engine.saveCsv(_engine.buildTimesheetCsv(rows, firstDay: first, lastDay: last), name);
+      } else {
+        final bytes = await _engine.buildTimesheetPdf(rows, organizationName: await _organizationName(user.organizationId), period: _payPeriodLabel);
+        await _engine.savePdf(bytes, name);
+      }
+      final toReview = rows.where((r) => r.needsReview).length;
+      messenger.showSnackBar(SnackBar(
+        content: Text('Exported ${rows.length} employees as ${format.toUpperCase()}.'
+            '${toReview > 0 ? ' $toReview need review before payroll.' : ''}'),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    } finally {
+      if (mounted) setState(() => _exporting = null);
+    }
+  }
+
+  Widget _downloadButtons({required String prefix, required void Function(String format) onExport}) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        FilledButton.icon(
+          onPressed: _exporting != null ? null : () => onExport('csv'),
+          icon: _exporting == '${prefix}csv'
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.table_chart_outlined, size: 18),
+          label: const Text('Download CSV'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _exporting != null ? null : () => onExport('pdf'),
+          icon: _exporting == '${prefix}pdf'
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+          label: const Text('Download PDF'),
+        ),
+      ],
+    );
   }
 
   Future<void> _save(Future<void> Function() action) async {
@@ -114,26 +192,32 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               label: Text(_periodLabel),
             ),
             const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                FilledButton.icon(
-                  onPressed: _exporting != null ? null : () => _export('csv'),
-                  icon: _exporting == 'csv'
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.table_chart_outlined, size: 18),
-                  label: const Text('Download CSV'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _exporting != null ? null : () => _export('pdf'),
-                  icon: _exporting == 'pdf'
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                  label: const Text('Download PDF'),
-                ),
-              ],
+            _downloadButtons(prefix: '', onExport: _export),
+          ],
+        ),
+      ),
+    );
+
+    final isManager = ref.watch(authProvider).currentUser?.isManager ?? false;
+    final timesheetCard = Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardTitle(icon: Icons.more_time, title: 'Export timesheets'),
+            const SizedBox(height: 8),
+            Text('Ordinary hours, overtime and breaks for each employee, to import into your payroll software. '
+                'Anyone with open exceptions is flagged.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: _pickPayPeriod,
+              icon: const Icon(Icons.date_range_outlined, size: 18),
+              label: Text(_payPeriodLabel),
             ),
+            const SizedBox(height: 16),
+            _downloadButtons(prefix: 'timesheet-', onExport: _exportTimesheet),
           ],
         ),
       ),
@@ -211,19 +295,30 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         children: [
           const PageHeader(
             title: 'Compliance reports',
-            subtitle: 'Export exception history and configure scheduled summaries.',
+            subtitle: 'Export exception history and timesheets, and configure scheduled summaries.',
           ),
           const SizedBox(height: 24),
           LayoutBuilder(builder: (context, c) {
             if (c.maxWidth < 900) {
-              return Column(children: [exportCard, const SizedBox(height: 16), scheduleCard]);
+              return Column(children: [
+                exportCard,
+                const SizedBox(height: 16),
+                if (isManager) ...[timesheetCard, const SizedBox(height: 16)],
+                scheduleCard,
+              ]);
             }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: exportCard),
-                const SizedBox(width: 20),
-                Expanded(child: scheduleCard),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: exportCard),
+                    const SizedBox(width: 20),
+                    Expanded(child: isManager ? timesheetCard : scheduleCard),
+                  ],
+                ),
+                if (isManager) ...[const SizedBox(height: 20), scheduleCard],
               ],
             );
           }),

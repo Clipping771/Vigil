@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/employee.dart';
+import '../models/leave_calendar.dart';
 import '../models/leave_request.dart';
 import '../models/shift.dart';
 import '../providers/auth_provider.dart';
+import '../providers/leave_calendar_provider.dart';
 import '../providers/leave_provider.dart';
 import '../providers/roster_provider.dart';
 import '../providers/staff_provider.dart';
@@ -54,10 +56,11 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
       return true;
     }).toList();
 
+    final calendar = ref.watch(leaveCalendarProvider);
     final year = DateTime.now().year;
     final mine = all.where((r) => r.employeeId == me?.id && r.isApproved);
-    final usedAnnual = mine.where((r) => r.leaveType == 'annual').fold<int>(0, (s, r) => s + r.workingDaysInYear(year));
-    final usedSick = mine.where((r) => r.leaveType == 'sick').fold<int>(0, (s, r) => s + r.workingDaysInYear(year));
+    final usedAnnual = mine.where((r) => r.leaveType == 'annual').fold<int>(0, (s, r) => s + r.workingDaysInYear(year, calendar));
+    final usedSick = mine.where((r) => r.leaveType == 'sick').fold<int>(0, (s, r) => s + r.workingDaysInYear(year, calendar));
     // The staff list is live, so a manager's change shows without signing in again.
     final myRecord = ref.watch(staffProvider).value?.where((e) => e.id == me?.id).firstOrNull ?? me;
     final annualEntitlement = myRecord?.annualLeaveDays ?? 0;
@@ -116,6 +119,14 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
             ),
           ],
         ),
+        if (ref.watch(leaveCalendarFailedProvider)) ...[
+          const SizedBox(height: 16),
+          const InfoBanner(
+            'Could not load the roster or public holidays, so leave days may be too high. They are counted Monday to Friday until these load.',
+            tone: Tone.warning,
+            icon: Icons.warning_amber_rounded,
+          ),
+        ],
         SectionHeader(isManager ? 'Requests' : 'My requests'),
         Wrap(
           spacing: 8,
@@ -181,13 +192,14 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
           for (final r in visible)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _requestCard(r, me, isManager, shifts),
+              child: _requestCard(r, me, isManager, shifts, calendar),
             ),
       ],
     );
   }
 
-  Widget _requestCard(LeaveRequest r, Employee? me, bool isManager, List<Shift> shifts) {
+  Widget _requestCard(LeaveRequest r, Employee? me, bool isManager, List<Shift> shifts, LeaveCalendar calendar) {
+    final workingDays = r.workingDays(calendar);
     final t = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     final own = r.employeeId == me?.id;
@@ -235,7 +247,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Icon(typeIcon, size: 16, color: cs.onSurfaceVariant),
-                          Text('$typeLabel  ·  $dates  ·  ${r.workingDays} working ${r.workingDays == 1 ? 'day' : 'days'}',
+                          Text('$typeLabel  ·  $dates  ·  $workingDays working ${workingDays == 1 ? 'day' : 'days'}',
                               style: t.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
                         ],
                       ),
