@@ -3,6 +3,7 @@ import 'package:vigil/models/employee.dart';
 import 'package:vigil/models/clock_event.dart';
 import 'package:vigil/models/exception_record.dart';
 import 'package:vigil/models/geofence_zone.dart';
+import 'package:vigil/models/leave_calendar.dart';
 import 'package:vigil/models/leave_request.dart';
 import 'package:vigil/models/shift.dart';
 import 'package:vigil/providers/realtime_rows.dart';
@@ -241,6 +242,7 @@ void main() {
   });
 
   group('Leave days', () {
+    final noRoster = LeaveCalendar();
     LeaveRequest leave(DateTime start, DateTime end) =>
         LeaveRequest(id: 'l', employeeId: 'e', leaveType: 'annual', startDate: start, endDate: end, status: 'approved');
 
@@ -248,30 +250,30 @@ void main() {
       // Monday 2 Nov to the next Monday 9 Nov.
       final r = leave(DateTime(2026, 11, 2), DateTime(2026, 11, 9));
       expect(r.durationDays, 8);
-      expect(r.workingDays, 6);
-      expect(leave(DateTime(2026, 11, 7), DateTime(2026, 11, 8)).workingDays, 0);
+      expect(r.workingDays(noRoster), 6);
+      expect(leave(DateTime(2026, 11, 7), DateTime(2026, 11, 8)).workingDays(noRoster), 0);
     });
 
     test('leave across New Year counts against each year', () {
       // Tuesday 29 Dec 2026 to Tuesday 5 Jan 2027.
       final r = leave(DateTime(2026, 12, 29), DateTime(2027, 1, 5));
-      expect(r.workingDaysInYear(2026), 3);
-      expect(r.workingDaysInYear(2027), 3);
-      expect(r.workingDaysInYear(2028), 0);
-      expect(r.workingDays, 6);
+      expect(r.workingDaysInYear(2026, noRoster), 3);
+      expect(r.workingDaysInYear(2027, noRoster), 3);
+      expect(r.workingDaysInYear(2028, noRoster), 0);
+      expect(r.workingDays(noRoster), 6);
     });
 
     test('a daylight saving change does not lose a day', () {
       // Australian clocks go forward on Sunday 4 Oct 2026.
       final r = leave(DateTime(2026, 10, 1), DateTime(2026, 10, 7));
       expect(r.durationDays, 7);
-      expect(r.workingDays, 5);
+      expect(r.workingDays(noRoster), 5);
     });
 
     test('an end date before the start counts as one day', () {
       final r = leave(DateTime(2026, 11, 4), DateTime(2026, 11, 2));
       expect(r.durationDays, 1);
-      expect(r.workingDays, 1);
+      expect(r.workingDays(noRoster), 1);
     });
   });
 

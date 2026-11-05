@@ -79,8 +79,8 @@ CREATE TEMP TABLE real_code ON COMMIT DROP AS
 GRANT SELECT ON real_code TO authenticated;
 SELECT pg_temp.as_user('a0000000-0000-0000-0000-000000000002');
 DO $$ DECLARE e public.clock_events; BEGIN
-  INSERT INTO public.clock_events (organization_id, employee_id, event_type, event_time, site_code)
-  VALUES (public.get_user_org_id(), public.current_employee_id(), 'clock_in', now(), (SELECT code FROM real_code))
+  INSERT INTO public.clock_events (organization_id, employee_id, event_type, event_time, latitude, longitude, site_code)
+  VALUES (public.get_user_org_id(), public.current_employee_id(), 'clock_in', now(), -33.87, 151.21, (SELECT code FROM real_code))
   RETURNING * INTO e;
   IF NOT e.is_geofenced THEN RAISE EXCEPTION 'FAIL 3c: the real code was not verified'; END IF;
   IF e.site_code IS NOT NULL THEN RAISE EXCEPTION 'FAIL 3d: the code was stored'; END IF;

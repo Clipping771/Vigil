@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/employee.dart';
 import '../services/ai_key_store.dart';
+import 'realtime_rows.dart';
 
 class AuthState {
   final Employee? currentUser;
@@ -39,6 +40,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   final _supabase = Supabase.instance.client;
   StreamSubscription<dynamic>? _authSub;
+  RealtimeChannel? _ownRowDeletes;
 
   Future<void> _init() async {
     // Listen first so sessions created from an email link (sign-up
@@ -47,6 +49,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       switch (data.event) {
         case AuthChangeEvent.signedOut:
           // Also covers sessions ended elsewhere or that can no longer refresh.
+          _stopWatchingRow();
           await AiKeyStore.clear();
           state = const AuthState(initialized: true);
         case AuthChangeEvent.passwordRecovery:
@@ -91,6 +94,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         currentUser: Employee.fromJson(Map<String, dynamic>.from(row)),
         passwordRecovery: passwordRecovery || state.passwordRecovery,
       );
+      _signOutIfRemoved(state.currentUser!.id);
     } on PostgrestException catch (e) {
       await _supabase.auth.signOut();
       state = AuthState(initialized: true, error: e.message);
@@ -99,6 +103,29 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _supabase.auth.signOut();
       state = const AuthState(initialized: true, error: 'Could not load your profile. Please try again.');
     }
+  }
+
+  /// Ends the session straight away if this employee's row is deleted while the
+  /// app is open, rather than leaving them on empty screens until a reload.
+  void _signOutIfRemoved(String employeeId) {
+    _stopWatchingRow();
+    _ownRowDeletes = listenForDeletes('employees', (oldRecord) async {
+      if (oldRecord['id'] != employeeId) return;
+      _stopWatchingRow();
+      await AiKeyStore.clear();
+      try {
+        await _supabase.auth.signOut();
+      } catch (e) {
+        debugPrint('Sign-out error: $e');
+      }
+      state = const AuthState(initialized: true, error: 'This account has been removed from Vigil. Ask your administrator for an invite.');
+    });
+  }
+
+  void _stopWatchingRow() {
+    final channel = _ownRowDeletes;
+    _ownRowDeletes = null;
+    if (channel != null) _supabase.removeChannel(channel);
   }
 
   Future<void> login(String email, String password) async {
@@ -192,6 +219,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   @override
   void dispose() {
+    _stopWatchingRow();
     _authSub?.cancel();
     super.dispose();
   }

@@ -5,7 +5,7 @@ The **Vigil** database is built on **PostgreSQL (Supabase)**. It provides multi-
 
 ---
 
-## 2. Table Schema (10 Core Tables)
+## 2. Table Schema (11 Core Tables)
 
 | # | Table Name | Purpose | Key Columns |
 |---|------------|---------|-------------|
@@ -19,6 +19,7 @@ The **Vigil** database is built on **PostgreSQL (Supabase)**. It provides multi-
 | 8 | `leave_requests` | Annual, sick, and unpaid leave applications & status | `id`, `organization_id`, `employee_id`, `start_date`, `end_date`, `leave_type`, `reason`, `status` |
 | 9 | `geofence_zones` | Authorized work sites with GPS coordinates & radius | `id`, `organization_id`, `name`, `latitude`, `longitude`, `radius_meters` |
 | 10| `audit_logs` | Security & enterprise compliance action logs | `id`, `organization_id`, `actor_id`, `action`, `entity_type`, `entity_id`, `details` |
+| 11| `public_holidays` | Each organization's holiday dates, which leave balances do not count (migration 009) | `id`, `organization_id`, `holiday_date`, `name` |
 
 ---
 

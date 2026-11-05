@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import '../models/public_holiday.dart';
 import '../providers/auth_provider.dart';
+import '../providers/leave_calendar_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/app_shell.dart';
@@ -58,6 +62,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               const _AppearanceSection(),
               if (user.isManager) const _ComplianceSection(),
+              if (user.isManager) const _PublicHolidaysSection(),
               const _AiSection(),
               const SizedBox(height: 8),
               Align(
@@ -214,6 +219,139 @@ class _ComplianceSection extends ConsumerWidget {
             title: const Text('Overtime threshold'),
             subtitle: const Text('Minutes past shift end before an overtime exception is raised'),
             trailing: stepper(settings.allowedOvertimeMinutes, 15, notifier.updateOvertimeMinutes),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicHolidaysSection extends ConsumerWidget {
+  const _PublicHolidaysSection();
+
+  Future<void> _add(BuildContext context, WidgetRef ref) async {
+    final organizationId = ref.read(authProvider).currentUser?.organizationId;
+    if (organizationId == null) return;
+    final name = TextEditingController();
+    final now = DateTime.now();
+    DateTime? date;
+
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setLocal) => AlertDialog(
+          title: const Text('Add public holiday'),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: name,
+                  maxLength: 100,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  onChanged: (_) => setLocal(() {}),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  label: Text(date == null ? 'Choose date' : DateFormat('EEE, d MMM yyyy').format(date!)),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: dialogCtx,
+                      initialDate: date ?? now,
+                      firstDate: DateTime(now.year - 1),
+                      lastDate: DateTime(now.year + 5, 12, 31),
+                    );
+                    if (picked != null) setLocal(() => date = picked);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: date == null || name.text.trim().isEmpty ? null : () => Navigator.pop(dialogCtx, true),
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final holidayName = name.text;
+    name.dispose();
+    if (save != true) return;
+
+    try {
+      await addPublicHoliday(organizationId: organizationId, date: date!, name: holidayName);
+      ref.invalidate(publicHolidaysProvider);
+    } on PostgrestException catch (e) {
+      if (context.mounted) {
+        showMessage(context, e.code == '23505' ? 'That date is already a public holiday.' : 'Could not add this public holiday.');
+      }
+    } catch (_) {
+      if (context.mounted) showMessage(context, 'Could not add this public holiday.');
+    }
+  }
+
+  Future<void> _remove(BuildContext context, WidgetRef ref, PublicHoliday holiday) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Remove ${holiday.name}?',
+      message: 'Leave on this date will use up leave balances again.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    );
+    if (!ok) return;
+    try {
+      await removePublicHoliday(holiday.id);
+      ref.invalidate(publicHolidaysProvider);
+    } catch (_) {
+      if (context.mounted) showMessage(context, 'Could not remove this public holiday.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final holidays = ref.watch(publicHolidaysProvider);
+    final thisYear = DateTime(DateTime.now().year);
+    final shown = (holidays.valueOrNull ?? const <PublicHoliday>[]).where((h) => !h.date.isBefore(thisYear)).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    return _Section(
+      title: 'Public holidays',
+      subtitle: 'Leave on these dates does not use up balances. Applies to everyone in your organization, so add the holidays for your state each year.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (holidays.hasError)
+            const ListTile(leading: Icon(Icons.cloud_off_outlined), title: Text('Could not load public holidays'))
+          else if (shown.isEmpty && !holidays.isLoading)
+            const ListTile(title: Text('No public holidays added yet')),
+          for (final h in shown)
+            ListTile(
+              title: Text(h.name),
+              subtitle: Text(DateFormat('EEE, d MMM yyyy').format(h.date)),
+              trailing: IconButton(
+                tooltip: 'Remove ${h.name}',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _remove(context, ref, h),
+              ),
+            ),
+          const Divider(height: 1),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: TextButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Add public holiday'),
+                onPressed: () => _add(context, ref),
+              ),
+            ),
           ),
         ],
       ),

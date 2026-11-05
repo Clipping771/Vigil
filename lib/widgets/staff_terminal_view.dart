@@ -10,6 +10,7 @@ import '../providers/attendance_provider.dart';
 import '../providers/geofence_provider.dart';
 import '../providers/roster_provider.dart';
 import '../services/clock_service.dart';
+import '../services/qr_punch.dart';
 import '../providers/auth_provider.dart';
 import '../providers/exception_provider.dart';
 import 'review_trail.dart';
@@ -148,10 +149,19 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
     }
   }
 
-  Future<void> _record(String type, String success, {double? lat, double? lng, String? siteCode}) async {
+  Future<void> _record(String type, String success, {double? lat, double? lng}) {
+    final clock = ref.read(clockServiceProvider);
+    return _showPunchResult(() async {
+      await clock.recordClockEvent(type, latitude: lat, longitude: lng);
+      return success;
+    });
+  }
+
+  /// Runs [punch] and shows the message it returns, or why it failed.
+  Future<void> _showPunchResult(Future<String> Function() punch) async {
     try {
-      await ref.read(clockServiceProvider).recordClockEvent(type, latitude: lat, longitude: lng, siteCode: siteCode);
-      if (mounted) showMessage(context, success);
+      final message = await punch();
+      if (mounted) showMessage(context, message);
     } on ClockStateException catch (e) {
       if (mounted) showMessage(context, e.message);
     } catch (_) {
@@ -193,13 +203,7 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
                 if (raw == null) return;
                 handled = true;
                 Navigator.pop(ctx);
-                final zones = await ref.read(geofenceProvider.future);
-                final zone = zones.where((z) => isSiteQrFor(raw, z.id)).firstOrNull;
-                if (zone == null) {
-                  if (mounted) showMessage(context, 'That is not a Vigil site code for your organization.');
-                  return;
-                }
-                await _record('clock_in', 'Clocked in at ${zone.name}.', siteCode: raw);
+                await _punchWithScan(raw);
               },
             ),
           ),
@@ -207,6 +211,27 @@ class _StaffTerminalViewState extends ConsumerState<StaffTerminalView> {
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))],
       ),
     );
+  }
+
+  Future<void> _punchWithScan(String raw) async {
+    if (!mounted) return;
+    final clock = ref.read(clockServiceProvider);
+    setState(() => _busy = true);
+    try {
+      await _showPunchResult(() async {
+        final zones = await ref.read(geofenceProvider.future);
+        final zone = zones.where((z) => isSiteQrFor(raw, z.id)).firstOrNull;
+        if (zone == null) return 'That is not a Vigil site code for your organization.';
+        return punchWithSiteCode(
+          siteCode: raw,
+          siteName: zone.name,
+          save: ({latitude, longitude, required siteCode}) =>
+              clock.recordClockEvent('clock_in', latitude: latitude, longitude: longitude, siteCode: siteCode),
+        );
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   /// Tells the employee when a manager reviews one of their issues, or when a

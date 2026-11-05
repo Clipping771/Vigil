@@ -4,11 +4,13 @@ import 'package:vigil/models/employee.dart';
 import 'package:vigil/models/exception_record.dart';
 import 'package:vigil/models/geofence_zone.dart';
 import 'package:vigil/models/leave_request.dart';
+import 'package:vigil/models/public_holiday.dart';
 import 'package:vigil/models/shift.dart';
 import 'package:vigil/providers/attendance_provider.dart';
 import 'package:vigil/providers/auth_provider.dart';
 import 'package:vigil/providers/exception_provider.dart';
 import 'package:vigil/providers/geofence_provider.dart';
+import 'package:vigil/providers/leave_calendar_provider.dart';
 import 'package:vigil/providers/leave_provider.dart';
 import 'package:vigil/providers/live_workforce_provider.dart';
 import 'package:vigil/providers/roster_provider.dart';
@@ -61,7 +63,20 @@ final _shifts = [
 
 class _Auth extends AuthNotifier {
   _Auth() {
-    state = AuthState(initialized: true, currentUser: _staff.first);
+    // Read the role here: `_staff` is built once, so it keeps the first role used.
+    final me = _staff.first;
+    state = AuthState(
+      initialized: true,
+      currentUser: Employee(
+        id: me.id,
+        organizationId: me.organizationId,
+        email: me.email,
+        fullName: me.fullName,
+        role: previewRole,
+        siteLocation: me.siteLocation,
+        createdAt: me.createdAt,
+      ),
+    );
   }
 }
 
@@ -143,6 +158,10 @@ final previewOverrides = [
   attendanceProvider.overrideWith((ref) => _Attendance(ref)),
   staffProvider.overrideWith((ref) => Stream.value(_staff)),
   rosterProvider.overrideWith((ref) => Stream.value(_shifts)),
+  leaveShiftsProvider.overrideWith((ref) async => _shifts),
+  publicHolidaysProvider.overrideWith((ref) => Stream.value([
+        PublicHoliday(id: 'h1', organizationId: _org, date: _today.add(const Duration(days: 3)), name: 'Sample public holiday'),
+      ])),
   todayShiftProvider.overrideWith((ref) async => _shifts.first),
   geofenceProvider.overrideWith((ref) => Stream.value([
         GeofenceZone(id: 'z1', organizationId: _org, name: 'Oakleigh HQ & Plant', latitude: -37.8988, longitude: 145.0915, radiusMeters: 250, createdAt: _today),

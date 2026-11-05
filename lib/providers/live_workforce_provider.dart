@@ -135,6 +135,14 @@ class WorkforceNotifier extends StateNotifier<WorkforceState> {
         callback: (_) => _scheduleReload(),
       );
     }
+    // Filtered subscriptions can miss deletes (see listenForDeletes). Removing
+    // someone must take them off the live board straight away.
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.delete,
+      schema: 'public',
+      table: 'employees',
+      callback: (_) => _scheduleReload(),
+    );
     _workforceChannel = channel..subscribe();
   }
 

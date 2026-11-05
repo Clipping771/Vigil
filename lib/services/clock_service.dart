@@ -46,9 +46,10 @@ class ClockService {
     return toStart < toEnd ? toStart : toEnd;
   }
 
-  /// Records a punch. The database sets its time and whether it is on site,
-  /// from the position or from [siteCode], a scanned site QR code.
-  Future<void> recordClockEvent(
+  /// Records a punch and returns it as saved. The database sets its time and
+  /// whether it is on site, from the position and, for a scanned site QR code,
+  /// [siteCode].
+  Future<ClockEvent> recordClockEvent(
     String eventType, {
     double? latitude,
     double? longitude,
@@ -115,6 +116,7 @@ class ClockService {
 
     // 6. Refresh attendance state immediately
     await _ref.read(attendanceProvider.notifier).loadTodayAttendance();
+    return clockEvent;
   }
 
   /// Inserts [records], skipping any type already raised for the same shift

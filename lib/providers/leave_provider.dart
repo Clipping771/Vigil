@@ -64,6 +64,20 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
           });
         },
       )
+      // Filtered subscriptions can miss deletes (see listenForDeletes), and
+      // removing an employee deletes their leave requests too.
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.delete,
+        schema: 'public',
+        table: 'leave_requests',
+        callback: (payload) {
+          if (!state.requests.any((r) => r.id == payload.oldRecord['id'])) return;
+          _debounce?.cancel();
+          _debounce = Timer(const Duration(milliseconds: 400), () {
+            if (mounted) loadLeaveRequests(silent: true);
+          });
+        },
+      )
       ..subscribe();
   }
 

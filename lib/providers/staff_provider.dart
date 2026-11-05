@@ -8,10 +8,11 @@ import 'realtime_rows.dart';
 final staffProvider = StreamProvider<List<Employee>>((ref) {
   final orgId = ref.watch(authProvider.select((s) => s.currentUser?.organizationId));
   if (orgId == null) return Stream.value(const []);
+  final clean = liveRows(ref, 'employees');
   return Supabase.instance.client
       .from('employees')
       .stream(primaryKey: ['id'])
       .eq('organization_id', orgId)
       .order('full_name', ascending: true)
-      .map((rows) => withoutDuplicateRows(ref, rows).map(Employee.fromJson).toList());
+      .map((rows) => clean(rows).map(Employee.fromJson).toList());
 });

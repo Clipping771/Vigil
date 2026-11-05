@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/auth_provider.dart';
+import '../providers/realtime_rows.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/auth_layout.dart' show validateEmail;
 import '../widgets/ui_kit.dart';
@@ -24,11 +25,22 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
   Map<String, String> _orgNames = {};
   String _query = '';
   String? _orgFilter;
+  late final RealtimeChannel _deletes;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // This list is loaded once, so take users off it as they are deleted anywhere.
+    _deletes = listenForDeletes('employees', (oldRecord) {
+      if (mounted) setState(() => _users.removeWhere((u) => u['id'] == oldRecord['id']));
+    });
+  }
+
+  @override
+  void dispose() {
+    _db.removeChannel(_deletes);
+    super.dispose();
   }
 
   Future<void> _load() async {

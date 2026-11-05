@@ -81,6 +81,20 @@ class ExceptionNotifier extends StateNotifier<ExceptionState> {
           });
         },
       )
+      // Filtered subscriptions can miss deletes (see listenForDeletes), and
+      // removing an employee deletes their exceptions too.
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.delete,
+        schema: 'public',
+        table: 'exception_records',
+        callback: (payload) {
+          if (!state.allExceptions.any((e) => e.id == payload.oldRecord['id'])) return;
+          _debounce?.cancel();
+          _debounce = Timer(const Duration(milliseconds: 400), () {
+            if (mounted) fetchExceptions(silent: true);
+          });
+        },
+      )
       ..subscribe();
   }
 

@@ -12,6 +12,7 @@ const _tables = [
   'breaks',
   'exception_records',
   'leave_requests',
+  'public_holidays',
   'geofence_zones',
   'audit_logs',
 ];
